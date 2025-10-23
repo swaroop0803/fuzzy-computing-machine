@@ -1,22 +1,23 @@
 // --- 1. Import the tools we need ---
 import { render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 // --- 2. Import the components we are testing ---
-import Login from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/pages/Login.tsx';
+import Login from '../src/pages/Login';
 // Assuming Home and Register components exist for navigation checks
-import Home from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/pages/Home.tsx';
-import Register from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/pages/Register.tsx'; 
+import Home from '../src/pages/Home';
+import Register from '../src/pages/Register'; 
 
 // --- 3. Import our mock server setup and handlers ---
-import { server } from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/mocks/server.ts';
+import { server } from '../src/mocks/server';
 // We need access to the handlers to dynamically change behavior (e.g., simulate server down)
 import { 
   successLoginHandler, 
   invalidCredentialsHandler, 
   networkErrorHandler 
-} from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/mocks/handlers.ts'; 
+} from '../src/mocks/handlers.ts'; 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
 
 

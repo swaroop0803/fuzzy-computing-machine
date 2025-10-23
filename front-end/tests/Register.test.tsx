@@ -6,11 +6,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 // --- 2. Import the components we are testing ---
-import Register from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/pages/Register.tsx';
-import Login from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/pages/Login.tsx'; // We need this to check if navigation works
+import Register from '../src/pages/Register.tsx';
+import Login from '../src/pages/Login.tsx'; // We need this to check if navigation works
 
 // --- 3. Import our "stunt double" for the backend ---
-import { server } from '/Users/kakumanulouisbabu/Desktop/Tech/web-development/React/DEMO/front-end/src/mocks/server.ts';
+import { server } from '../src/mocks/server.ts';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
 
 
