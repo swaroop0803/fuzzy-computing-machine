@@ -9,11 +9,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repository (FIXED: Added token for fetch permission)
+      # 1️⃣ Checkout the repository (Necessary for code and token)
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }} # Ensures permissions for subsequent branch fetching
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # 2️⃣ Setup Node.js
       - name: Setup Node.js
@@ -31,30 +31,17 @@ jobs:
         run: npm test 
         working-directory: front-end
 
-      # 5️⃣ Load previous Allure report history
-      - name: Load previous Allure report history
-        uses: actions/checkout@v3
-        if: always()
-        continue-on-error: true
-        with:
-          ref: gh-pages
-          path: allure-prev-history 
-
-      # 6️⃣ Build Allure report
-      - name: Build Allure report
+      # 5️⃣ BUILD AND PUBLISH ALLURE REPORT (Combines Steps 5, 6, 7 from before)
+      - name: Build and Publish Allure Report to GitHub Pages
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
+          # This action handles history loading/publishing internally
           allure_results: front-end/allure-results
-          gh_pages: allure-prev-history
-          allure_history: allure-report-html 
-
-      # 7️⃣ Publish Allure report to gh-pages
-      - name: Publish Allure report
-        uses: peaceiris/actions-gh-pages@v3
-        if: always()
-        with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: allure-report-html
-          force_orphan: true
+          # The branch to publish the report to
+          allure_report: allure-report-html 
+          # The directory where the final HTML report will be created
+
+      # The separate peaceiris/actions-gh-pages step is no longer needed!
