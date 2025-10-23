@@ -4,25 +4,32 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checks out your repository under $GITHUB_WORKSPACE, so the job can access the code
       - uses: actions/checkout@v3
-
+      
+      # Step 2: Sets up the Java Development Kit (JDK) environment
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: zulu
           java-version: 17
-
+          
+      # Step 3: Runs the Gradle 'clean test' command to execute all tests
       - name: Run tests
         run: ./gradlew clean test
-
+        
+      # Step 4: Attempts to check out the 'gh-pages' branch to load historical report data.
+      # FIX: Changed 'actions:checkout@v3' to 'actions/checkout@v3'
       - name: Load test report history
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3 
         if: always()
         continue-on-error: true
         with:
           ref: gh-pages
           path: gh-pages
-
+          
+      # Step 5: Builds the Allure report using results from 'build/allure-results' and history.
+      # 'if: always()' ensures the report generation happens regardless of test success.
       - name: Build test report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
@@ -30,7 +37,9 @@ jobs:
           gh_pages: gh-pages
           allure_history: allure-history
           allure_results: build/allure-results
-
+          
+      # Step 6: Publishes the generated report history to the 'gh-pages' branch.
+      # This makes the report accessible via GitHub Pages.
       - name: Publish test report
         uses: peaceiris/actions-gh-pages@v3
         if: always()
