@@ -9,9 +9,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repository
+      # 1️⃣ Checkout the repository (FIXED: Added token for fetch permission)
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # Ensures permissions for subsequent branch fetching
 
       # 2️⃣ Setup Node.js
       - name: Setup Node.js
@@ -25,7 +27,6 @@ jobs:
         working-directory: front-end
 
       # 4️⃣ Run tests (generate Allure results)
-      # FIX: Changed from 'npm run test:allure' to the correct 'npm test' script
       - name: Run tests and generate Allure results
         run: npm test 
         working-directory: front-end
@@ -40,8 +41,6 @@ jobs:
           path: allure-prev-history 
 
       # 6️⃣ Build Allure report
-      # NOTE: This step requires that your Vitest configuration is set up to generate
-      # Allure JSON files in the 'front-end/allure-results' directory.
       - name: Build Allure report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
