@@ -1,1 +1,51 @@
+name: Run tests and publish report (JS/TS)
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
 
+      # ⚠️ Step 1: Replace Java Setup with Node.js Setup
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20' # <--- Set this to your required Node version (e.g., 18 or 20)
+          
+      # ⚠️ Step 2: Install Dependencies and Run Tests
+      - name: Install dependencies and Run tests
+        # Navigate to the front-end folder first, then install and run tests
+        run: |
+          cd front-end
+          npm install
+          npm run test:allure # <--- ASSUMES you have a script for 'test:allure' in package.json
+          
+      # Note: Allure results path must be correct for your Vitest config.
+      # Based on your file tree, it looks like: front-end/allure-results
+      
+      # --- Report Steps (These use the same structure, but the path is updated) ---
+
+      - name: Load test report history
+        uses: actions/checkout@v3
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Build test report
+        uses: simple-elf/allure-report-action@v1.7
+        if: always()
+        with:
+          gh_pages: gh-pages
+          allure_history: allure-history
+          # ⚠️ Path is now relative to the root, pointing into the front-end folder
+          allure_results: front-end/allure-results 
+
+      - name: Publish test report
+        uses: peaceiris/actions-gh-pages@v3
+        if: always()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
