@@ -1,38 +1,36 @@
-# ci.yml
+name: Run tests and publish report (Node.js/Allure)
 
-# The name of the workflow, displayed on GitHub's Actions tab
-name: Run tests and publish report
-
-# Defines when the workflow runs (on every push)
 on: [push]
 
-# A workflow run is made up of one or more jobs
 jobs:
   test:
-    # Configure the type of machine to run the job on
     runs-on: ubuntu-latest
-
-    # Sequence of tasks to be executed as part of the job
+    
     steps:
       # Step 1: Checks out your repository code
       - uses: actions/checkout@v3
       
-      # Step 2: Sets up the Java Development Kit (JDK) environment
-      - name: Set up JDK
-        uses: actions/setup-java@v3
+      # Step 2: Sets up the Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          distribution: zulu
-          java-version: 17
+          node-version: '20' 
           
-      # FIX 1: Make Gradle Wrapper executable (fixes "No such file or directory" error)
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      # --- START FRONT-END-SPECIFIC STEPS ---
+      
+      # Step 3: Install Node dependencies
+      - name: Install Front-end Dependencies
+        run: npm install
+        # CRITICAL: Run this command inside the 'front-end' directory
+        working-directory: front-end
 
-      # Step 3: Runs the Gradle 'clean test' command to execute all tests
-      - name: Run tests
-        run: ./gradlew clean test
+      # Step 4: Runs the Node.js test command, generating Allure results (JSON files)
+      - name: Run Front-end Tests & Generate Results
+        run: npm test
+        # CRITICAL: Run this command inside the 'front-end' directory
+        working-directory: front-end
         
-      # Step 4: Loads previous report history from the gh-pages branch
+      # Step 5: Load previous report history from the gh-pages branch
       - name: Load test report history
         uses: actions/checkout@v3 
         if: always()
@@ -41,22 +39,25 @@ jobs:
           ref: gh-pages
           path: gh-pages
           
-      # Step 5: Builds the Allure report using results and history
-      - name: Build test report
+      # Step 6: Build the Allure HTML report
+      # The allure-results are now expected to be in front-end/allure-results
+      - name: Build Allure HTML Report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          gh_pages: gh-pages
+          # Tell Allure where to find the JSON files (relative to root)
+          allure_results: front-end/allure-results
+          # Directory where the final HTML report will be created
+          gh_pages: allure_report
           allure_history: allure-history
-          allure_results: build/allure-results
-          
-      # Step 6: Publishes the report history to the gh-pages branch
-      - name: Publish test report
+
+      # Step 7: Publishes the final HTML report to the gh-pages branch for GitHub Pages viewing
+      - name: Publish Allure Report
         uses: peaceiris/actions-gh-pages@v3
         if: always()
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: allure-history
-          # FIX 2: Ensures the gh-pages branch is created if it doesn't exist
+          # publish_dir is set to the final HTML output directory
+          publish_dir: allure_report
           force_orphan: true
