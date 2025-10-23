@@ -1,10 +1,20 @@
+# ci.yml
+
+# The name of the workflow, displayed on GitHub's Actions tab
 name: Run tests and publish report
+
+# Defines when the workflow runs (on every push)
 on: [push]
+
+# A workflow run is made up of one or more jobs
 jobs:
   test:
+    # Configure the type of machine to run the job on
     runs-on: ubuntu-latest
+
+    # Sequence of tasks to be executed as part of the job
     steps:
-      # Step 1: Checks out your repository under $GITHUB_WORKSPACE, so the job can access the code
+      # Step 1: Checks out your repository code
       - uses: actions/checkout@v3
       
       # Step 2: Sets up the Java Development Kit (JDK) environment
@@ -14,12 +24,15 @@ jobs:
           distribution: zulu
           java-version: 17
           
+      # FIX 1: Make Gradle Wrapper executable (fixes "No such file or directory" error)
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       # Step 3: Runs the Gradle 'clean test' command to execute all tests
       - name: Run tests
         run: ./gradlew clean test
         
-      # Step 4: Attempts to check out the 'gh-pages' branch to load historical report data.
-      # FIX: Changed 'actions:checkout@v3' to 'actions/checkout@v3'
+      # Step 4: Loads previous report history from the gh-pages branch
       - name: Load test report history
         uses: actions/checkout@v3 
         if: always()
@@ -28,8 +41,7 @@ jobs:
           ref: gh-pages
           path: gh-pages
           
-      # Step 5: Builds the Allure report using results from 'build/allure-results' and history.
-      # 'if: always()' ensures the report generation happens regardless of test success.
+      # Step 5: Builds the Allure report using results and history
       - name: Build test report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
@@ -38,8 +50,7 @@ jobs:
           allure_history: allure-history
           allure_results: build/allure-results
           
-      # Step 6: Publishes the generated report history to the 'gh-pages' branch.
-      # This makes the report accessible via GitHub Pages.
+      # Step 6: Publishes the report history to the gh-pages branch
       - name: Publish test report
         uses: peaceiris/actions-gh-pages@v3
         if: always()
@@ -47,3 +58,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-history
+          # FIX 2: Ensures the gh-pages branch is created if it doesn't exist
+          force_orphan: true
