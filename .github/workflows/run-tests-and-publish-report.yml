@@ -2,7 +2,7 @@ name: Run tests and publish Allure report
 
 on:
   push:
-    branches: [ main ]   # Change if your main branch has a different name
+    branches: [ main ]  # Change if your main branch has a different name
 
 jobs:
   build-and-publish:
@@ -22,14 +22,14 @@ jobs:
       # 3️⃣ Install dependencies
       - name: Install dependencies
         run: npm ci
+        # CRITICAL FIX: Run command inside the front-end folder
+        working-directory: front-end
 
       # 4️⃣ Run tests (generate Allure results)
-      # Make sure your test command actually produces allure-results folder
       - name: Run tests and generate Allure results
-        run: npm run test:allure
-
-        # 👇 Example: if your package.json has a script like
-        # "test:allure": "npx jest --runInBand --reporters=jest-allure --output=allure-results"
+        run: npm run test:allure # Ensure this is the correct script name in your package.json
+        # CRITICAL FIX: Run command inside the front-end folder
+        working-directory: front-end
 
       # 5️⃣ Load previous Allure report history
       - name: Load previous Allure report history
@@ -38,16 +38,19 @@ jobs:
         continue-on-error: true
         with:
           ref: gh-pages
-          path: allure-prev-history
+          path: allure-prev-history # Folder to store the history loaded from gh-pages
 
       # 6️⃣ Build Allure report
       - name: Build Allure report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          gh_pages: allure-prev-history          # same name as in previous step
-          allure_results: allure-results         # folder where your allure results are generated
-          allure_history: allure-history         # folder where the new HTML report will be stored
+          # Tell Allure where to find the JSON files (relative to root)
+          allure_results: front-end/allure-results
+          # Folder where the history was loaded from
+          gh_pages: allure-prev-history
+          # Folder where the new HTML report will be created for publishing
+          allure_history: allure-report-html # Renamed from allure-history to be clearer
 
       # 7️⃣ Publish Allure report to gh-pages
       - name: Publish Allure report
@@ -56,4 +59,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: allure-history
+          # Publish the newly built HTML report folder
+          publish_dir: allure-report-html
+          force_orphan: true
