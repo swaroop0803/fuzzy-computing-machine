@@ -31,17 +31,16 @@ jobs:
         run: npm test 
         working-directory: front-end
 
-      # 5️⃣ BUILD AND PUBLISH ALLURE REPORT (Combines Steps 5, 6, 7 from before)
+      # 5️⃣ BUILD AND PUBLISH ALLURE REPORT (Final, Cleaned Step)
       - name: Build and Publish Allure Report to GitHub Pages
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          # This action handles history loading/publishing internally
+          # Tell Allure where to find the JSON results
           allure_results: front-end/allure-results
+          # Provide the token for publishing
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
           # The branch to publish the report to
-          allure_report: allure-report-html 
+          publish_branch: gh-pages
           # The directory where the final HTML report will be created
-
-      # The separate peaceiris/actions-gh-pages step is no longer needed!
+          allure_report: allure-report-html
