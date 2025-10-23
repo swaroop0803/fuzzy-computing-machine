@@ -1,63 +1,59 @@
-name: Run tests and publish report (Node.js/Allure)
+name: Run tests and publish Allure report
 
-on: [push]
+on:
+  push:
+    branches: [ main ]   # Change if your main branch has a different name
 
 jobs:
-  test:
+  build-and-publish:
     runs-on: ubuntu-latest
-    
-    steps:
-      # Step 1: Checks out your repository code
-      - uses: actions/checkout@v3
-      
-      # Step 2: Sets up the Node.js environment
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20' 
-          
-      # --- START FRONT-END-SPECIFIC STEPS ---
-      
-      # Step 3: Install Node dependencies
-      - name: Install Front-end Dependencies
-        run: npm install
-        # CRITICAL: Run this command inside the 'front-end' directory
-        working-directory: front-end
 
-      # Step 4: Runs the Node.js test command, generating Allure results (JSON files)
-      - name: Run Front-end Tests & Generate Results
-        run: npm test
-        # CRITICAL: Run this command inside the 'front-end' directory
-        working-directory: front-end
-        
-      # Step 5: Load previous report history from the gh-pages branch
-      - name: Load test report history
-        uses: actions/checkout@v3 
+    steps:
+      # 1️⃣ Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # 4️⃣ Run tests (generate Allure results)
+      # Make sure your test command actually produces allure-results folder
+      - name: Run tests and generate Allure results
+        run: npm run test:allure
+
+        # 👇 Example: if your package.json has a script like
+        # "test:allure": "npx jest --runInBand --reporters=jest-allure --output=allure-results"
+
+      # 5️⃣ Load previous Allure report history
+      - name: Load previous Allure report history
+        uses: actions/checkout@v3
         if: always()
         continue-on-error: true
         with:
           ref: gh-pages
-          path: gh-pages
-          
-      # Step 6: Build the Allure HTML report
-      # The allure-results are now expected to be in front-end/allure-results
-      - name: Build Allure HTML Report
+          path: allure-prev-history
+
+      # 6️⃣ Build Allure report
+      - name: Build Allure report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          # Tell Allure where to find the JSON files (relative to root)
-          allure_results: front-end/allure-results
-          # Directory where the final HTML report will be created
-          gh_pages: allure_report
-          allure_history: allure-history
+          gh_pages: allure-prev-history          # same name as in previous step
+          allure_results: allure-results         # folder where your allure results are generated
+          allure_history: allure-history         # folder where the new HTML report will be stored
 
-      # Step 7: Publishes the final HTML report to the gh-pages branch for GitHub Pages viewing
-      - name: Publish Allure Report
+      # 7️⃣ Publish Allure report to gh-pages
+      - name: Publish Allure report
         uses: peaceiris/actions-gh-pages@v3
         if: always()
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          # publish_dir is set to the final HTML output directory
-          publish_dir: allure_report
-          force_orphan: true
+          publish_dir: allure-history
