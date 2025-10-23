@@ -50,7 +50,7 @@ export default function Register() {
   return (
     <Card className="mx-auto max-w-sm">
       <CardHeader>
-        <CardTitle className="text-2xl">Register</CardTitle>
+        <CardTitle className="text-2xl" role="heading">Register</CardTitle>
         <CardDescription>Enter your information to create an account</CardDescription>
       </CardHeader>
       <CardContent>

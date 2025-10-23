@@ -21,7 +21,7 @@ afterAll(() => server.close()); // Stop the stunt double after all tests are don
 
 
 // --- 5. The Test Show! ---
-describe('The Register Page Show', () => {
+describe('The Register Page', () => {
 
   // --- SCENE 1: A user successfully registers ---
   test('should let a user register and then show the login page', async () => {
