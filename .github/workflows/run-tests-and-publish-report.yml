@@ -31,16 +31,12 @@ jobs:
         run: npm test 
         working-directory: front-end
 
-      # 5️⃣ BUILD AND PUBLISH ALLURE REPORT (Final, Cleaned Step)
+      # 5️⃣ BUILD AND PUBLISH ALLURE REPORT (This step handles the creation of 'gh-pages')
       - name: Build and Publish Allure Report to GitHub Pages
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          # Tell Allure where to find the JSON results
           allure_results: front-end/allure-results
-          # Provide the token for publishing
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # The branch to publish the report to
           publish_branch: gh-pages
-          # The directory where the final HTML report will be created
           allure_report: allure-report-html
