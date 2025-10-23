@@ -2,7 +2,7 @@ name: Run tests and publish Allure report
 
 on:
   push:
-    branches: [ main ]  # Change if your main branch has a different name
+    branches: [ main ]
 
 jobs:
   build-and-publish:
@@ -22,13 +22,12 @@ jobs:
       # 3️⃣ Install dependencies
       - name: Install dependencies
         run: npm ci
-        # CRITICAL FIX: Run command inside the front-end folder
         working-directory: front-end
 
       # 4️⃣ Run tests (generate Allure results)
+      # FIX: Changed from 'npm run test:allure' to the correct 'npm test' script
       - name: Run tests and generate Allure results
-        run: npm run test:allure # Ensure this is the correct script name in your package.json
-        # CRITICAL FIX: Run command inside the front-end folder
+        run: npm test 
         working-directory: front-end
 
       # 5️⃣ Load previous Allure report history
@@ -38,19 +37,18 @@ jobs:
         continue-on-error: true
         with:
           ref: gh-pages
-          path: allure-prev-history # Folder to store the history loaded from gh-pages
+          path: allure-prev-history 
 
       # 6️⃣ Build Allure report
+      # NOTE: This step requires that your Vitest configuration is set up to generate
+      # Allure JSON files in the 'front-end/allure-results' directory.
       - name: Build Allure report
         uses: simple-elf/allure-report-action@v1.7
         if: always()
         with:
-          # Tell Allure where to find the JSON files (relative to root)
           allure_results: front-end/allure-results
-          # Folder where the history was loaded from
           gh_pages: allure-prev-history
-          # Folder where the new HTML report will be created for publishing
-          allure_history: allure-report-html # Renamed from allure-history to be clearer
+          allure_history: allure-report-html 
 
       # 7️⃣ Publish Allure report to gh-pages
       - name: Publish Allure report
@@ -59,6 +57,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          # Publish the newly built HTML report folder
           publish_dir: allure-report-html
           force_orphan: true
