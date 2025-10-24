@@ -1,43 +1,35 @@
 import { test, expect } from "@playwright/test";
 
-test("full user flow: register → login → home → logout", async ({ page }) => {
+test("full user flow: register → login → home → logout → forward navigation", async ({ page }) => {
+  // 1️⃣ Open the app → should show Register page
+  await page.goto("http://localhost:5173/");
+  await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Register");
 
-  // 1️⃣ Go to login page
-  await page.goto("http://localhost:5173/login");
-  await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Login", { timeout: 5000 });
-
-  // 2️⃣ Click "Register" link
-  await page.click("text=Register");
-  await expect(page).toHaveURL("http://localhost:5173/register", { timeout: 5000 });
-
-  // 3️⃣ Fill registration form
+  // 2️⃣ Fill registration form
   const randomEmail = `testuser_${Date.now()}@example.com`;
   await page.fill("#username", "testuser");
   await page.fill("#email", randomEmail);
   await page.fill("#password", "testpassword");
+  await page.click('button:has-text("Create an account")');
 
-  // Submit registration and wait for login page
-  await Promise.all([
-    page.waitForNavigation({ url: "http://localhost:5173/login", timeout: 5000 }),
-    page.click('button:has-text("Create an account")'),
-  ]);
+  // 3️⃣ Should redirect to Login page
+  await expect(page).toHaveURL("http://localhost:5173/login");
+  await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Login");
 
   // 4️⃣ Fill login form
   await page.fill("#email", randomEmail);
   await page.fill("#password", "testpassword");
 
-  // Submit login and wait for home page
-  await Promise.all([
-    page.waitForNavigation({ url: "http://localhost:5173/home", timeout: 5000 }),
-    page.click('button:has-text("Login")'),
-  ]);
+  // 5️⃣ Should redirect to Home page
+  await expect(page).toHaveURL("http://localhost:5173/home");
+  await expect(page.locator('[data-testid="welcome-message"]')).toContainText("Hello, testuser");
 
-  // 5️⃣ Verify home page and username
-  await expect(page.locator('[data-testid="welcome-message"]')).toContainText("Hello, testuser", { timeout: 5000 });
+  // 6️⃣ Logout → should redirect to Login page
+  await page.click('button:has-text("Logout")');
+  await expect(page).toHaveURL("http://localhost:5173/login");
 
-  // 6️⃣ Logout and wait for login page
-  await Promise.all([
-    page.waitForNavigation({ url: "http://localhost:5173/login", timeout: 5000 }),
-    page.click('button:has-text("Logout")'),
-  ]);
+  // 7️⃣ Navigate forward (browser action) → should go to Home page without login
+  await page.goForward();
+  await expect(page).toHaveURL("http://localhost:5173/home");
+  await expect(page.locator('[data-testid="welcome-message"]')).toContainText("Hello, testuser");
 });
