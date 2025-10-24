@@ -31,7 +31,7 @@ jobs:
       # 4️⃣ Install dependencies in back-end
       - name: Install back-end dependencies
         run: npm install
-        working-directory: back-end
+        working-directory: back-end/server
 
       # 5️⃣ Install dependencies in e2e-tests (if any)
       - name: Install e2e-tests dependencies
