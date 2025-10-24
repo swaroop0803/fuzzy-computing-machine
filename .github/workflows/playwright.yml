@@ -1,15 +1,14 @@
-name: Playwright E2E Tests
+name: E2E Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
+
     services:
       mysql:
         image: mysql:8.0
@@ -22,58 +21,46 @@ jobs:
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # Install dependencies
-      - name: Install front-end dependencies
-        run: npm install
-        working-directory: front-end
-
-      - name: Install back-end dependencies
+      # -------------------------------
+      # Backend dependencies
+      - name: Install backend dependencies
         run: npm install
         working-directory: back-end/server
 
-      - name: Install e2e-tests dependencies
+      # -------------------------------
+      # Frontend dependencies
+      - name: Install frontend dependencies
         run: npm install
-        working-directory: e2e-tests
+        working-directory: front-end
 
+      # -------------------------------
       # Install Playwright browsers
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-        working-directory: e2e-tests
+        run: npx playwright install
 
-      # Start front-end and back-end servers in background
-      - name: Start servers
+      # -------------------------------
+      # Start backend server
+      - name: Start backend server
         run: |
-          echo "Starting front-end..."
-          npm run dev --prefix front-end &
-
-          echo "Starting back-end with .env.ci..."
           cd back-end/server
           env $(cat .env.ci | xargs) node server &
-
-          # Wait for servers to be ready
-          npx wait-on http://localhost:5173
           npx wait-on http://localhost:5001
-        shell: bash
 
+      # -------------------------------
+      # Start frontend server
+      - name: Start frontend server
+        run: |
+          cd front-end
+          npm run dev &
+          npx wait-on http://localhost:5173
+
+      # -------------------------------
       # Run Playwright tests
-      - name: Run Playwright tests
+      - name: Run E2E tests
         run: npx playwright test --reporter=html
-        working-directory: e2e-tests
-
-      # Upload Playwright report as artifact
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: e2e-tests/playwright-report
