@@ -56,15 +56,16 @@ jobs:
         run: npx playwright install --with-deps
         working-directory: e2e-tests
 
-      # 7️⃣ Start front-end and back-end servers in background
+      # 7️⃣ Start front-end and back-end servers
       - name: Start front-end and back-end servers
         run: |
           echo "Starting front-end..."
           npm run dev --prefix front-end &
-
+          
           echo "Starting back-end with .env.ci..."
-          cd back-end/server && env $(cat .env.ci | xargs) node server &
-
+          cd back-end/server
+          env $(cat .env.ci | xargs) node server &
+          
           # Wait for servers to be ready
           npx wait-on http://localhost:5173
           npx wait-on http://localhost:5001
@@ -75,7 +76,7 @@ jobs:
         run: npx playwright test --reporter=html
         working-directory: e2e-tests
 
-      # 9️⃣ Upload Playwright report
+      # 9️⃣ Upload Playwright report as artifact
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         with:
