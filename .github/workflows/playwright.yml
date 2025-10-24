@@ -10,8 +10,6 @@ on:
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
     services:
       mysql:
         image: mysql:8.0
@@ -27,75 +25,55 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3️⃣ Install front-end dependencies
+      # Install dependencies
       - name: Install front-end dependencies
         run: npm install
         working-directory: front-end
 
-      # 4️⃣ Install back-end dependencies
       - name: Install back-end dependencies
         run: npm install
         working-directory: back-end/server
 
-      # 5️⃣ Install e2e-tests dependencies
       - name: Install e2e-tests dependencies
         run: npm install
         working-directory: e2e-tests
 
-      # 6️⃣ Install Playwright browsers
+      # Install Playwright browsers
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
         working-directory: e2e-tests
 
-      # 7️⃣ Start front-end and back-end servers in background
-      - name: Start front-end and back-end servers
+      # Start front-end and back-end servers in background
+      - name: Start servers
         run: |
           echo "Starting front-end..."
           npm run dev --prefix front-end &
-          
+
           echo "Starting back-end with .env.ci..."
           cd back-end/server
           env $(cat .env.ci | xargs) node server &
-          
+
           # Wait for servers to be ready
           npx wait-on http://localhost:5173
           npx wait-on http://localhost:5001
         shell: bash
 
-      # 8️⃣ Run Playwright tests headless
+      # Run Playwright tests
       - name: Run Playwright tests
         run: npx playwright test --reporter=html
         working-directory: e2e-tests
 
-      # 9️⃣ Upload Playwright report as artifact
+      # Upload Playwright report as artifact
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: e2e-tests/playwright-report
-
-      # 🔟 Deploy Playwright report to GitHub Pages
-      - name: Deploy Playwright report to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: e2e-tests/playwright-report
-          publish_branch: playwright-report
-          force_orphan: true
-
-      # 1️⃣1️⃣ Display Report URL in workflow summary
-      - name: Display Playwright Report URL
-        run: |
-          echo "## ✅ Playwright Report Published Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "You can view it here:" >> $GITHUB_STEP_SUMMARY
-          echo "- [View Playwright Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
