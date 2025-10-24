@@ -1,0 +1,70 @@
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3️⃣ Install dependencies in front-end
+      - name: Install front-end dependencies
+        run: npm install
+        working-directory: front-end
+
+      # 4️⃣ Install dependencies in back-end
+      - name: Install back-end dependencies
+        run: npm install
+        working-directory: back-end
+
+      # 5️⃣ Install dependencies in e2e-tests (if any)
+      - name: Install e2e-tests dependencies
+        run: npm install
+        working-directory: e2e-tests
+
+      # 6️⃣ Install Playwright browsers
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+        working-directory: e2e-tests
+
+      # 7️⃣ Start front-end and back-end servers in background
+      - name: Start front-end and back-end servers
+        run: |
+          echo "Starting front-end..."
+          npm run dev --prefix front-end &
+          
+          echo "Starting back-end..."
+          cd back-end/server && node server &
+          
+          # Wait for servers to be ready
+          npx wait-on http://localhost:5173
+          npx wait-on http://localhost:5001
+        shell: bash
+
+      # 8️⃣ Run Playwright tests
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=html
+        working-directory: e2e-tests
+
+      # 9️⃣ Upload Playwright report as artifact
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: e2e-tests/playwright-report
