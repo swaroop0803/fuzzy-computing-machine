@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("full user flow: register → login → home → logout → forward navigation", async ({ page }) => {
+test("full user flow: register → login → home → logout → forward navigation blocked", async ({ page }) => {
   // 1️⃣ Open the app → should show Register page
   await page.goto("http://localhost:5173/");
   await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Register");
@@ -16,9 +16,10 @@ test("full user flow: register → login → home → logout → forward navigat
   await expect(page).toHaveURL("http://localhost:5173/login");
   await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Login");
 
-  // 4️⃣ Fill login form
+  // 4️⃣ Fill login form and click login
   await page.fill("#email", randomEmail);
   await page.fill("#password", "testpassword");
+  await page.click('button:has-text("Login")'); // ✅ Important
 
   // 5️⃣ Should redirect to Home page
   await expect(page).toHaveURL("http://localhost:5173/home");
@@ -27,9 +28,10 @@ test("full user flow: register → login → home → logout → forward navigat
   // 6️⃣ Logout → should redirect to Login page
   await page.click('button:has-text("Logout")');
   await expect(page).toHaveURL("http://localhost:5173/login");
+  await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Login");
 
-  // 7️⃣ Navigate forward (browser action) → should go to Home page without login
+  // 7️⃣ Navigate forward (browser action) → should NOT go to Home page
   await page.goForward();
-  await expect(page).toHaveURL("http://localhost:5173/home");
-  await expect(page.locator('[data-testid="welcome-message"]')).toContainText("Hello, testuser");
+  await expect(page).toHaveURL("http://localhost:5173/login"); // blocked
+  await expect(page.locator('h2, h1, [role="heading"]')).toContainText("Login");
 });
