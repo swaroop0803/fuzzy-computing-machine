@@ -9,7 +9,7 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     services:
       mysql:
@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 20
 
-      # 3️⃣ Wait for MySQL service
+      # 3️⃣ Wait for MySQL service to be healthy
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
@@ -49,7 +49,7 @@ jobs:
           echo "❌ MySQL did not become healthy in time."
           exit 1
 
-      # 4️⃣ Backend dependencies & cache
+      # 4️⃣ Cache & install backend dependencies
       - name: Cache backend dependencies
         uses: actions/cache@v4
         with:
@@ -61,19 +61,22 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix ./back-end/server
 
-      # 5️⃣ Start backend server
+      # 5️⃣ Start backend server (waits for MySQL TCP port first)
       - name: Start Backend Server
         run: |
           cd back-end/server
+          # wait until MySQL is accepting connections
+          npx wait-on tcp:mysql:3306
+          # start backend
           DB_HOST=mysql \
           DB_USER=root \
           DB_PASSWORD=root_password \
           DB_NAME=testdb \
           node server &
-          sleep 5  # give server time to start
+          sleep 5
         shell: bash
 
-      # 6️⃣ Frontend dependencies & cache
+      # 6️⃣ Cache & install frontend dependencies
       - name: Cache frontend dependencies
         uses: actions/cache@v4
         with:
@@ -90,10 +93,10 @@ jobs:
         run: |
           cd front-end
           npm run dev &
-          sleep 5  # give frontend time to start
+          sleep 5
         shell: bash
 
-      # 8️⃣ Playwright dependencies & cache
+      # 8️⃣ Cache & install Playwright dependencies
       - name: Cache Playwright dependencies
         uses: actions/cache@v4
         with:
