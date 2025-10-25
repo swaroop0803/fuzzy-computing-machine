@@ -16,8 +16,8 @@ jobs:
       mysql: # This service name becomes the HOSTNAME for the Node.js application
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: root_password # Replace with your actual DB_PASSWORD secret
-          MYSQL_DATABASE: testdb # Replace with your actual DB_NAME secret
+          MYSQL_ROOT_PASSWORD: root_password # This will be the DB_PASSWORD for the root user
+          MYSQL_DATABASE: testdb # This will be the DB_NAME
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
@@ -35,8 +35,13 @@ jobs:
         run: npm install --prefix ./back-end/server
 
       - name: Start Backend Server (on port 5001)
-        # Fix uses DB_HOST=mysql and runs in background (&)
-        run: DB_HOST=mysql npm start --prefix ./back-end/server & 
+        # FIX: Pass all required DB environment variables for Node.js to connect to the MySQL service.
+        run: |
+          DB_HOST=mysql \
+          DB_USER=root \
+          DB_PASSWORD=root_password \
+          DB_NAME=testdb \
+          npm start --prefix ./back-end/server &
         
       - name: Install Wait-On Utility
         run: npm install wait-on
