@@ -25,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # UPGRADED to v4
+        uses: actions/checkout@v4
 
       # -------------------------------
-      # E2E Dependencies (FIX: Install Playwright and its dependencies)
+      # E2E Dependencies
       - name: Install E2E Dependencies
         run: npm install
         working-directory: e2e-tests
@@ -38,6 +38,18 @@ jobs:
       - name: Install backend dependencies
         run: npm install
         working-directory: back-end/server
+
+      # -------------------------------
+      # Initialize MySQL Schema (THIS IS THE KEY FIX)
+      - name: Initialize MySQL Schema
+        run: |
+          # Wait until the MySQL server is fully healthy and ready
+          npx wait-on tcp:3306
+          
+          # Execute the init.sql script to create the users table and RegisterUser procedure
+          # This should fix the "PROCEDURE... does not exist" error.
+          mysql -h 127.0.0.1 -u root -proot testdb < back-end/server/init.sql
+        shell: bash
 
       # -------------------------------
       # Frontend dependencies
@@ -76,10 +88,10 @@ jobs:
         working-directory: e2e-tests
 
       # -------------------------------
-      # Upload Logs and Reports (FIX: Upgraded to v4)
+      # Upload Logs and Reports
       - name: Upload Logs and Playwright Report
-        uses: actions/upload-artifact@v4 # Changed from v3 to v4
-        if: always() # Run this step even if the tests fail
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: debug-artifacts
           path: |
