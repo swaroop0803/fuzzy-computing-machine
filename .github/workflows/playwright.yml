@@ -41,6 +41,10 @@ jobs:
         # 💥 FIX: Override DB_HOST to 'mysql' to connect to the service container.
         run: DB_HOST=mysql npm start --prefix ./back-end/server & 
         
+      # 💥 NEW: Introduce a short sleep to allow the Node process to start up 💥
+      - name: Wait for Node.js process to start
+        run: sleep 5
+        
       - name: Install Wait-On Utility
         # This utility pauses the workflow until a URL is active
         run: npm install wait-on
