@@ -61,7 +61,7 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix ./back-end/server
 
-      # 5️⃣ Start backend
+      # 5️⃣ Start backend server
       - name: Start Backend Server
         run: |
           cd back-end/server
@@ -70,6 +70,7 @@ jobs:
           DB_PASSWORD=root_password \
           DB_NAME=testdb \
           node server &
+          sleep 5  # give server time to start
         shell: bash
 
       # 6️⃣ Frontend dependencies & cache
@@ -89,6 +90,7 @@ jobs:
         run: |
           cd front-end
           npm run dev &
+          sleep 5  # give frontend time to start
         shell: bash
 
       # 8️⃣ Playwright dependencies & cache
@@ -108,7 +110,7 @@ jobs:
 
       # 9️⃣ Wait for backend & frontend to be ready
       - name: Wait for backend & frontend
-        run: npx wait-on --timeout 150000 tcp:127.0.0.1:5001 http://127.0.0.1:5173
+        run: npx wait-on --timeout 180000 http://127.0.0.1:5001/health http://127.0.0.1:5173
 
       # 🔟 Run Playwright tests
       - name: Run Playwright E2E Tests
