@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v3
 
       # -------------------------------
-      # E2E Dependencies (FIXED STEP: Runs npm install inside 'e2e-tests')
+      # E2E Dependencies (FIX: Install Playwright and its dependencies)
       - name: Install E2E Dependencies
         run: npm install
         working-directory: e2e-tests
@@ -46,29 +46,44 @@ jobs:
         working-directory: front-end
 
       # -------------------------------
-      # Install Playwright browsers (Runs from E2E directory)
+      # Install Playwright browsers
       - name: Install Playwright browsers
         run: npx playwright install
-        working-directory: e2e-tests # Install browsers relative to the E2E folder
+        working-directory: e2e-tests
 
       # -------------------------------
-      # Start backend server
-      - name: Start backend server
+      # Start backend server (MODIFIED for logging)
+      - name: Start backend server and capture logs
         run: |
           cd back-end/server
-          env $(cat .env.ci | xargs) node server &
+          # Use nohup and redirect output to a file (backend.log)
+          env $(cat .env.ci | xargs) nohup node server > backend.log 2>&1 &
           npx wait-on http://localhost:5001
 
       # -------------------------------
-      # Start frontend server
-      - name: Start frontend server
+      # Start frontend server (MODIFIED for logging)
+      - name: Start frontend server and capture logs
         run: |
           cd front-end
-          npm run dev &
+          # Use nohup and redirect output to a file (frontend.log)
+          nohup npm run dev > frontend.log 2>&1 &
           npx wait-on http://localhost:5173
 
       # -------------------------------
-      # Run Playwright tests (Runs from E2E directory)
+      # Run Playwright tests
       - name: Run E2E tests
         run: npx playwright test --reporter=html
-        working-directory: e2e-tests # Run tests from the E2E folder
+        working-directory: e2e-tests
+
+      # -------------------------------
+      # Upload Logs and Reports (NEW STEP for debugging)
+      - name: Upload Logs and Playwright Report
+        uses: actions/upload-artifact@v3
+        if: always() # Run this step even if the tests fail
+        with:
+          name: debug-artifacts
+          path: |
+            back-end/server/backend.log
+            front-end/frontend.log
+            e2e-tests/test-results/
+            e2e-tests/playwright-report/
