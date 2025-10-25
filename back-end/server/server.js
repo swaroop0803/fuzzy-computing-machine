@@ -51,6 +51,10 @@ app.get("/", (req, res) => {
   res.send("API is running successfully...");
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // Connect to Database and Start Server
 db.getConnection()
   .then((connection) => {
