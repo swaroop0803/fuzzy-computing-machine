@@ -9,7 +9,7 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     services:
       mysql:
@@ -39,7 +39,7 @@ jobs:
       - name: Install wait-on globally
         run: npm install -g wait-on
 
-      # 4️⃣ Wait for MySQL to be healthy
+      # 4️⃣ Wait for MySQL
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
@@ -53,6 +53,12 @@ jobs:
           echo "❌ MySQL did not become healthy in time."
           exit 1
 
+      # 4.5️⃣ Initialize MySQL with init.sql
+      - name: Initialize MySQL (tables & procedures)
+        run: |
+          echo "Running init.sql to create tables and procedures..."
+          mysql -h 127.0.0.1 -P 3306 -u root -proot_password testdb < back-end/server/init.sql
+
       # 5️⃣ Cache & install backend dependencies
       - name: Cache backend dependencies
         uses: actions/cache@v4
@@ -65,22 +71,19 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix ./back-end/server
 
-      # 6️⃣ Start backend server in background
+      # 6️⃣ Copy .env.ci to backend
+      - name: Use .env.ci for backend
+        run: cp back-end/server/.env.ci back-end/server/.env
+
+      # 7️⃣ Start backend server
       - name: Start Backend Server
         run: |
           cd back-end/server
-          # Ensure MySQL is ready
-          wait-on tcp:mysql:3306
-          # Start server in background
-          DB_HOST=mysql \
-          DB_USER=root \
-          DB_PASSWORD=root_password \
-          DB_NAME=testdb \
           node server &
           echo "✅ Backend started in background"
         shell: bash
 
-      # 7️⃣ Cache & install frontend dependencies
+      # 8️⃣ Cache & install frontend dependencies
       - name: Cache frontend dependencies
         uses: actions/cache@v4
         with:
@@ -92,15 +95,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix ./front-end
 
-      # 8️⃣ Start frontend in background
-      - name: Start Frontend (Vite)
+      # 9️⃣ Start frontend (Vite)
+      - name: Start Frontend
         run: |
           cd front-end
           npm run dev &
           echo "✅ Frontend started in background"
         shell: bash
 
-      # 9️⃣ Cache & install Playwright dependencies
+      # 🔟 Cache & install Playwright dependencies
       - name: Cache Playwright dependencies
         uses: actions/cache@v4
         with:
@@ -115,11 +118,11 @@ jobs:
           npm ci
           npx playwright install --with-deps
 
-      # 🔟 Wait for backend & frontend readiness
+      # 1️⃣1️⃣ Wait for backend & frontend to be ready
       - name: Wait for backend & frontend
         run: npx wait-on --timeout 180000 http://127.0.0.1:5001/health http://127.0.0.1:5173
 
-      # 1️⃣1️⃣ Run Playwright E2E tests
+      # 1️⃣2️⃣ Run Playwright E2E tests
       - name: Run Playwright E2E Tests
         run: |
           cd e2e-tests
@@ -127,7 +130,7 @@ jobs:
         env:
           CI: true
 
-      # 1️⃣2️⃣ Upload Playwright report
+      # 1️⃣3️⃣ Upload Playwright report
       - uses: actions/upload-artifact@v4
         if: always()
         with:
