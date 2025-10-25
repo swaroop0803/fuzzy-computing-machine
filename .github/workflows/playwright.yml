@@ -39,19 +39,14 @@ jobs:
 
       - name: Start Backend Server (on port 5001)
         # 💥 FIX: Override DB_HOST to 'mysql' to connect to the service container.
+        # Run in background.
         run: DB_HOST=mysql npm start --prefix ./back-end/server & 
         
-      # 💥 NEW: Introduce a short sleep to allow the Node process to start up 💥
-      - name: Wait for Node.js process to start
-        run: sleep 5
+      # 💥 REMOVED: Unreliable 'sleep 5' command removed. 💥
         
       - name: Install Wait-On Utility
         # This utility pauses the workflow until a URL is active
         run: npm install wait-on
-
-      - name: Wait for Backend to be Accessible (Port 5001)
-        # 💥 FIX: Switch to a reliable TCP port check instead of HTTP endpoint check 💥
-        run: npx wait-on --timeout 60000 tcp:localhost:5001
 
       # --- 2. Setup Frontend and Playwright ---
       - name: Install Frontend Dependencies
@@ -64,8 +59,10 @@ jobs:
         # Start the frontend on its default port 5173 and run in the background (&)
         run: npm run dev &
       
-      - name: Wait for Frontend to be Accessible (Port 5173)
-        run: npx wait-on http://localhost:5173
+      - name: Wait for All Services to be Accessible
+        # 💥 CRITICAL FIX: Wait for both the backend TCP port AND the frontend HTTP URL 
+        # in one step with a generous timeout (120s). This is the most reliable CI synchronization method. 💥
+        run: npx wait-on --timeout 120000 tcp:localhost:5001 http://localhost:5173
 
       # --- 3. Run Tests ---
       - name: Run Playwright Tests
