@@ -50,8 +50,8 @@ jobs:
         run: npm install wait-on
 
       - name: Wait for Backend to be Accessible (Port 5001)
-        # Wait up to 60 seconds for the backend to start and respond to requests
-        run: npx wait-on --timeout 60000 http://localhost:5001/api/register
+        # 💥 FIX: Switch to a reliable TCP port check instead of HTTP endpoint check 💥
+        run: npx wait-on --timeout 60000 tcp:localhost:5001
 
       # --- 2. Setup Frontend and Playwright ---
       - name: Install Frontend Dependencies
