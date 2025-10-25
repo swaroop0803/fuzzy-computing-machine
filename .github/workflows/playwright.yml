@@ -20,7 +20,7 @@ jobs:
           MYSQL_DATABASE: testdb # This will be the DB_NAME
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+        options: --health-cmd="mysqladmin ping -u root -p$$MYSQL_ROOT_PASSWORD" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +29,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          
+      # --- NEW CRITICAL FIX: Wait for MySQL Service Health ---
+      - name: Wait for MySQL Service to be Healthy
+        # This step uses the health status defined in the 'services' block
+        run: |
+          for i in {1..10}; do
+            if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
+              echo "MySQL service is healthy."
+              exit 0
+            fi
+            echo "Waiting for MySQL service to become healthy... Attempt $i"
+            sleep 10
+          done
+          echo "MySQL service did not become healthy within the time limit."
+          exit 1
 
       # --- 1. Start Backend Server (Required for API calls) ---
       - name: Install Backend Dependencies
