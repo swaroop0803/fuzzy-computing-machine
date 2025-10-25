@@ -9,7 +9,7 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     services:
       mysql:
@@ -20,83 +20,105 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"
+          --health-cmd="mysqladmin ping -u root -p$$MYSQL_ROOT_PASSWORD"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
+      # 2️⃣ Setup Node.js (no global cache here)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
-      # 3️⃣ Wait for MySQL readiness
+      # 3️⃣ Wait for MySQL
       - name: Wait for MySQL
         run: |
-          echo "⏳ Waiting for MySQL to be ready..."
           for i in {1..10}; do
-            if mysqladmin ping -h127.0.0.1 -uroot -proot_password --silent; then
-              echo "✅ MySQL is ready!"
-              break
+            if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
+              echo "✅ MySQL service is healthy."
+              exit 0
             fi
-            echo "Waiting... attempt $i"
+            echo "⏳ Waiting for MySQL service to become healthy... Attempt $i"
             sleep 10
           done
+          echo "❌ MySQL service did not become healthy within time limit."
+          exit 1
 
-      # 4️⃣ Backend setup and start
+      # 4️⃣ Cache & install backend deps
+      - name: Cache backend dependencies
+        uses: actions/cache@v4
+        with:
+          path: back-end/server/node_modules
+          key: ${{ runner.os }}-backend-${{ hashFiles('back-end/server/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-
+
       - name: Install backend dependencies
-        run: npm install --prefix ./back-end/server
+        run: npm ci --prefix ./back-end/server
 
-      - name: Start backend server
+      # --- Start Backend ---
+      - name: Start Backend Server (port 5001)
         run: |
-          DB_HOST=127.0.0.1 \
+          cd back-end/server
+          DB_HOST=mysql \
           DB_USER=root \
           DB_PASSWORD=root_password \
           DB_NAME=testdb \
-          npm start --prefix ./back-end/server &
-        env:
-          NODE_ENV: test
+          node server &
+        shell: bash
 
-      # 5️⃣ Frontend setup and start
+      # 5️⃣ Cache & install frontend deps
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: front-end/node_modules
+          key: ${{ runner.os }}-frontend-${{ hashFiles('front-end/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-
+
       - name: Install frontend dependencies
-        run: npm install --prefix ./front-end
+        run: npm ci --prefix ./front-end
 
-      - name: Start frontend (Vite)
-        run: npm run dev --prefix ./front-end &
-        env:
-          NODE_ENV: test
+      # --- Start Frontend (Vite) ---
+      - name: Start Frontend (Vite)
+        run: |
+          cd front-end
+          npm run dev &
+        shell: bash
 
-      # 6️⃣ Install Playwright and deps
+      # 6️⃣ Cache & install Playwright deps
+      - name: Cache Playwright dependencies
+        uses: actions/cache@v4
+        with:
+          path: e2e-tests/node_modules
+          key: ${{ runner.os }}-e2e-${{ hashFiles('e2e-tests/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-e2e-
+
       - name: Install Playwright dependencies
         run: |
           cd e2e-tests
-          npm install
+          npm ci
           npx playwright install --with-deps
 
       # 7️⃣ Wait for both servers
       - name: Wait for backend & frontend
         run: npx wait-on --timeout 120000 tcp:127.0.0.1:5001 http://127.0.0.1:5173
 
-      # 8️⃣ Run Playwright E2E Tests (simplified)
+      # 8️⃣ Run Playwright E2E Tests
       - name: Run Playwright E2E Tests
         run: |
           cd e2e-tests
-          npm test
-        env:
-          CI: true
+          npx playwright test --reporter=html
 
-      # 9️⃣ Upload Playwright Report
-      - name: Upload Playwright Report
+      # --- Upload Report ---
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: e2e-tests/playwright-report/
-          retention-days: 14
+          retention-days: 30
