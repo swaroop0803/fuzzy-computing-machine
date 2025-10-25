@@ -7,9 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-  e2e:
+  playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     services:
       mysql:
@@ -28,79 +28,84 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Setup Node.js
+      # 1️⃣ Setup Node.js
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Install wait-on globally
-      - run: npm install -g wait-on
-
-      # Wait for MySQL service
+      # 2️⃣ Wait for MySQL
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
             if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
-              echo "✅ MySQL healthy"
+              echo "✅ MySQL service is healthy."
               exit 0
             fi
-            echo "⏳ Waiting for MySQL... Attempt $i"
+            echo "⏳ Waiting for MySQL service... Attempt $i"
             sleep 10
           done
-          echo "❌ MySQL not healthy"
+          echo "❌ MySQL did not become healthy in time."
           exit 1
 
-      # Initialize MySQL
-      - name: Initialize MySQL
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -proot_password testdb < back-end/server/init.sql
-
-      # Install backend dependencies
-      - name: Install backend deps
+      # 3️⃣ Install dependencies
+      - name: Install Backend Dependencies
         run: npm ci --prefix ./back-end/server
 
-      # Copy .env.ci
-      - name: Copy backend env
-        run: cp back-end/server/.env.ci back-end/server/.env
-
-      # Start backend server
-      - name: Start backend
-        run: |
-          cd back-end/server
-          node server &
-          echo "✅ Backend started"
-
-      # Install frontend dependencies
-      - name: Install frontend deps
+      - name: Install Frontend Dependencies
         run: npm ci --prefix ./front-end
 
-      # Start frontend server
-      - name: Start frontend
+      - name: Install Playwright Dependencies
         run: |
-          cd front-end
-          npm run dev &
-          echo "✅ Frontend started"
-
-      # Install Playwright deps
-      - name: Install Playwright
-        run: |
-          cd e2e-tests
-          npm ci
+          npm ci --prefix ./e2e-tests
           npx playwright install --with-deps
 
-      # Wait for backend & frontend
-      - name: Wait for backend & frontend
-        run: npx wait-on --timeout 180000 http://127.0.0.1:5001/health http://127.0.0.1:5173
+      # 4️⃣ Start Backend with logs
+      - name: Start Backend Server with logs
+        run: |
+          echo "🔹 Starting backend..."
+          node back-end/server/server.js > back-end/server/server.log 2>&1 &
+          echo "🔹 Backend PID: $!"
+        env:
+          PORT: 5001
+          DB_HOST: mysql
+          DB_USER: root
+          DB_PASSWORD: root_password
+          DB_NAME: testdb
+          JWT_SECRET: a_very_strong_secret
 
-      # Run Playwright tests
-      - name: Run Playwright tests
+      # 5️⃣ Tail backend logs until ready
+      - name: Wait for Backend to be Ready
+        run: |
+          timeout 180 bash -c 'until grep -q "🚀 Server is running" back-end/server/server.log; do
+            echo "⏳ Waiting for backend..."
+            tail -n 10 back-end/server/server.log
+            sleep 5
+          done
+          echo "✅ Backend is ready!"'
+
+      # 6️⃣ Start Frontend (Vite)
+      - name: Start Frontend with logs
+        run: |
+          npm run dev --prefix front-end > front-end/vite.log 2>&1 &
+          echo "🔹 Frontend started"
+
+      # 7️⃣ Wait for Frontend to be ready
+      - name: Wait for Frontend
+        run: |
+          timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
+            echo "⏳ Waiting for frontend..."
+            tail -n 10 front-end/vite.log
+            sleep 5
+          done
+          echo "✅ Frontend is ready!"'
+
+      # 8️⃣ Run Playwright E2E Tests
+      - name: Run Playwright E2E Tests
         run: |
           cd e2e-tests
           npx playwright test --reporter=html
-        env:
-          CI: true
 
-      # Upload report
+      # 9️⃣ Upload Playwright report as artifact
       - uses: actions/upload-artifact@v4
         if: always()
         with:
