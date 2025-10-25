@@ -28,11 +28,10 @@ jobs:
         uses: actions/checkout@v3
 
       # -------------------------------
-      # E2E & Root Dependencies (NEW CRITICAL STEP)
-      - name: Install E2E (Playwright) Dependencies
-        # This installs the dependencies for the root package.json, 
-        # which must contain "@playwright/test".
+      # E2E Dependencies (FIXED STEP: Runs npm install inside 'e2e-tests')
+      - name: Install E2E Dependencies
         run: npm install
+        working-directory: e2e-tests
 
       # -------------------------------
       # Backend dependencies
@@ -47,9 +46,10 @@ jobs:
         working-directory: front-end
 
       # -------------------------------
-      # Install Playwright browsers (This now succeeds because @playwright/test is installed)
+      # Install Playwright browsers (Runs from E2E directory)
       - name: Install Playwright browsers
         run: npx playwright install
+        working-directory: e2e-tests # Install browsers relative to the E2E folder
 
       # -------------------------------
       # Start backend server
@@ -68,6 +68,7 @@ jobs:
           npx wait-on http://localhost:5173
 
       # -------------------------------
-      # Run Playwright tests
+      # Run Playwright tests (Runs from E2E directory)
       - name: Run E2E tests
         run: npx playwright test --reporter=html
+        working-directory: e2e-tests # Run tests from the E2E folder
