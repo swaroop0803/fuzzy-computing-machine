@@ -8,83 +8,95 @@ on:
 
 jobs:
   playwright:
-    timeout-minutes: 15
     runs-on: ubuntu-latest
-    
-    # CRITICAL FIX: Define the MySQL service container
+    timeout-minutes: 20
+
     services:
-      mysql: # This service name becomes the HOSTNAME for the Node.js application
+      mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: root_password # This will be the DB_PASSWORD for the root user
-          MYSQL_DATABASE: testdb # This will be the DB_NAME
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: testdb
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping -u root -p$$MYSQL_ROOT_PASSWORD" --health-interval=10s --health-timeout=5s --health-retries=5
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # --- Setup Node ---
-      - uses: actions/setup-node@v4
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          
-      # --- NEW CRITICAL FIX: Wait for MySQL Service Health ---
-      - name: Wait for MySQL Service to be Healthy
-        # This step uses the health status defined in the 'services' block
+          cache: 'npm'
+
+      # 3️⃣ Wait for MySQL readiness
+      - name: Wait for MySQL
         run: |
+          echo "⏳ Waiting for MySQL to be ready..."
           for i in {1..10}; do
-            if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
-              echo "MySQL service is healthy."
-              exit 0
+            if mysqladmin ping -h127.0.0.1 -uroot -proot_password --silent; then
+              echo "✅ MySQL is ready!"
+              break
             fi
-            echo "Waiting for MySQL service to become healthy... Attempt $i"
+            echo "Waiting... attempt $i"
             sleep 10
           done
-          echo "MySQL service did not become healthy within the time limit."
-          exit 1
 
-      # --- 1. Start Backend Server (Required for API calls) ---
-      - name: Install Backend Dependencies
+      # 4️⃣ Backend setup and start
+      - name: Install backend dependencies
         run: npm install --prefix ./back-end/server
 
-      - name: Start Backend Server (on port 5001)
-        # FIX: Pass all required DB environment variables for Node.js to connect to the MySQL service.
+      - name: Start backend server
         run: |
-          DB_HOST=mysql \
+          DB_HOST=127.0.0.1 \
           DB_USER=root \
           DB_PASSWORD=root_password \
           DB_NAME=testdb \
           npm start --prefix ./back-end/server &
-        
-      - name: Install Wait-On Utility
-        run: npm install wait-on
+        env:
+          NODE_ENV: test
 
-      # --- 2. Setup Frontend and Playwright ---
-      - name: Install Frontend Dependencies
-        # FIX: Use the correct prefix for the frontend directory
+      # 5️⃣ Frontend setup and start
+      - name: Install frontend dependencies
         run: npm install --prefix ./front-end
 
-      - name: Install Playwright and Dependencies
-        run: npx playwright install --with-deps
-
-      - name: Start Frontend (Vite)
-        # FIX: Use the correct prefix for the frontend directory and run in background (&)
+      - name: Start frontend (Vite)
         run: npm run dev --prefix ./front-end &
-      
-      - name: Wait for All Services to be Accessible
-        # Wait for both backend (TCP) and frontend (HTTP)
-        run: npx wait-on --timeout 120000 tcp:localhost:5001 http://localhost:5173
+        env:
+          NODE_ENV: test
 
-      # --- 3. Run Tests ---
-      - name: Run Playwright Tests
-        run: npx playwright test --reporter=html
-      
-      # --- 4. Upload Results ---
-      - uses: actions/upload-artifact@v4
+      # 6️⃣ Install Playwright and deps
+      - name: Install Playwright dependencies
+        run: |
+          cd e2e-tests
+          npm install
+          npx playwright install --with-deps
+
+      # 7️⃣ Wait for both servers
+      - name: Wait for backend & frontend
+        run: npx wait-on --timeout 120000 tcp:127.0.0.1:5001 http://127.0.0.1:5173
+
+      # 8️⃣ Run Playwright E2E Tests (simplified)
+      - name: Run Playwright E2E Tests
+        run: |
+          cd e2e-tests
+          npm test
+        env:
+          CI: true
+
+      # 9️⃣ Upload Playwright Report
+      - name: Upload Playwright Report
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
-          retention-days: 30
+          path: e2e-tests/playwright-report/
+          retention-days: 14
