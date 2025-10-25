@@ -1,101 +1,62 @@
-name: E2E Tests
+name: E2E Tests (Playwright)
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  e2e-tests:
+  playwright:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        ports:
-          - 3306:3306
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testdb
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # -------------------------------
-      # E2E Dependencies
-      - name: Install E2E Dependencies
+      # --- Setup Node ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # --- 1. Start Backend Server (Required for API calls) ---
+      - name: Install Backend Dependencies
+        run: npm install --prefix ./back-end/server
+
+      - name: Start Backend Server (on port 5001)
+        # Use 'npm start' or 'node server.js' and run in the background (&)
+        run: npm start --prefix ./back-end/server & 
+        
+      - name: Install Wait-On Utility
+        # This utility pauses the workflow until a URL is active
+        run: npm install wait-on
+
+      - name: Wait for Backend to be Accessible (Port 5001)
+        # Wait up to 60 seconds for the backend to start and respond to requests
+        run: npx wait-on --timeout 60000 http://localhost:5001/api/register
+
+      # --- 2. Setup Frontend and Playwright ---
+      - name: Install Frontend Dependencies
         run: npm install
-        working-directory: e2e-tests
 
-      # -------------------------------
-      # Backend dependencies
-      - name: Install backend dependencies
-        run: npm install
-        working-directory: back-end/server
+      - name: Install Playwright and Dependencies
+        run: npx playwright install --with-deps
 
-      # -------------------------------
-      # Initialize MySQL Schema (THIS IS THE KEY FIX)
-      - name: Initialize MySQL Schema
-        run: |
-          # Wait until the MySQL server is fully healthy and ready
-          npx wait-on tcp:3306
-          
-          # Execute the init.sql script to create the users table and RegisterUser procedure
-          # This should fix the "PROCEDURE... does not exist" error.
-          mysql -h 127.0.0.1 -u root -proot testdb < back-end/server/init.sql
-        shell: bash
+      - name: Start Frontend (Vite)
+        # Start the frontend on its default port 5173 and run in the background (&)
+        run: npm run dev &
+      
+      - name: Wait for Frontend to be Accessible (Port 5173)
+        run: npx wait-on http://localhost:5173
 
-      # -------------------------------
-      # Frontend dependencies
-      - name: Install frontend dependencies
-        run: npm install
-        working-directory: front-end
-
-      # -------------------------------
-      # Install Playwright browsers
-      - name: Install Playwright browsers
-        run: npx playwright install
-        working-directory: e2e-tests
-
-      # -------------------------------
-      # Start backend server (MODIFIED for logging)
-      - name: Start backend server and capture logs
-        run: |
-          cd back-end/server
-          # Use nohup and redirect output to a file (backend.log)
-          env $(cat .env.ci | xargs) nohup node server > backend.log 2>&1 &
-          npx wait-on http://localhost:5001
-
-      # -------------------------------
-      # Start frontend server (MODIFIED for logging)
-      - name: Start frontend server and capture logs
-        run: |
-          cd front-end
-          # Use nohup and redirect output to a file (frontend.log)
-          nohup npm run dev > frontend.log 2>&1 &
-          npx wait-on http://localhost:5173
-
-      # -------------------------------
-      # Run Playwright tests
-      - name: Run E2E tests
+      # --- 3. Run Tests ---
+      - name: Run Playwright Tests
         run: npx playwright test --reporter=html
-        working-directory: e2e-tests
-
-      # -------------------------------
-      # Upload Logs and Reports
-      - name: Upload Logs and Playwright Report
-        uses: actions/upload-artifact@v4
+      
+      # --- 4. Upload Results ---
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: debug-artifacts
-          path: |
-            back-end/server/backend.log
-            front-end/frontend.log
-            e2e-tests/test-results/
-            e2e-tests/playwright-report/
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
