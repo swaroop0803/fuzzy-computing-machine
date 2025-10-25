@@ -28,6 +28,13 @@ jobs:
         uses: actions/checkout@v3
 
       # -------------------------------
+      # E2E & Root Dependencies (NEW CRITICAL STEP)
+      - name: Install E2E (Playwright) Dependencies
+        # This installs the dependencies for the root package.json, 
+        # which must contain "@playwright/test".
+        run: npm install
+
+      # -------------------------------
       # Backend dependencies
       - name: Install backend dependencies
         run: npm install
@@ -40,7 +47,7 @@ jobs:
         working-directory: front-end
 
       # -------------------------------
-      # Install Playwright browsers
+      # Install Playwright browsers (This now succeeds because @playwright/test is installed)
       - name: Install Playwright browsers
         run: npx playwright install
 
