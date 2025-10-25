@@ -14,14 +14,12 @@ jobs:
     # CRITICAL FIX: Define the MySQL service container
     services:
       mysql: # This service name becomes the HOSTNAME for the Node.js application
-        image: mysql:8.0 # Use a standard MySQL Docker image
-        # NOTE: You MUST pass your database configuration (User, Password, Name)
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root_password # Replace with your actual DB_PASSWORD secret
           MYSQL_DATABASE: testdb # Replace with your actual DB_NAME secret
-          # Use MYSQL_USER and MYSQL_PASSWORD if you do not want to use root
         ports:
-          - 3306:3306 # Map the port (optional, but good practice)
+          - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
@@ -37,8 +35,7 @@ jobs:
         run: npm install --prefix ./back-end/server
 
       - name: Start Backend Server (on port 5001)
-        # FIX: Override DB_HOST to 'mysql' to connect to the service container.
-        # Run in background (&)
+        # Fix uses DB_HOST=mysql and runs in background (&)
         run: DB_HOST=mysql npm start --prefix ./back-end/server & 
         
       - name: Install Wait-On Utility
@@ -46,18 +43,18 @@ jobs:
 
       # --- 2. Setup Frontend and Playwright ---
       - name: Install Frontend Dependencies
-        run: npm install
+        # FIX: Use the correct prefix for the frontend directory
+        run: npm install --prefix ./front-end
 
       - name: Install Playwright and Dependencies
         run: npx playwright install --with-deps
 
       - name: Start Frontend (Vite)
-        # Start the frontend on its default port 5173 and run in the background (&)
-        run: npm run dev &
+        # FIX: Use the correct prefix for the frontend directory and run in background (&)
+        run: npm run dev --prefix ./front-end &
       
       - name: Wait for All Services to be Accessible
-        # CRITICAL FIX: Wait for both the backend TCP port AND the frontend HTTP URL 
-        # with a generous timeout (120s).
+        # Wait for both backend (TCP) and frontend (HTTP)
         run: npx wait-on --timeout 120000 tcp:localhost:5001 http://localhost:5173
 
       # --- 3. Run Tests ---
