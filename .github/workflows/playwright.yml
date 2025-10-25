@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # UPGRADED to v4
 
       # -------------------------------
       # E2E Dependencies (FIX: Install Playwright and its dependencies)
@@ -76,9 +76,9 @@ jobs:
         working-directory: e2e-tests
 
       # -------------------------------
-      # Upload Logs and Reports (NEW STEP for debugging)
+      # Upload Logs and Reports (FIX: Upgraded to v4)
       - name: Upload Logs and Playwright Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # Changed from v3 to v4
         if: always() # Run this step even if the tests fail
         with:
           name: debug-artifacts
