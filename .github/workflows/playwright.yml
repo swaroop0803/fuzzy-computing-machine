@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  playwright:
+  e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -26,111 +26,81 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # Setup Node.js
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3️⃣ Install wait-on globally
-      - name: Install wait-on globally
-        run: npm install -g wait-on
+      # Install wait-on globally
+      - run: npm install -g wait-on
 
-      # 4️⃣ Wait for MySQL
+      # Wait for MySQL service
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
             if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
-              echo "✅ MySQL service is healthy."
+              echo "✅ MySQL healthy"
               exit 0
             fi
-            echo "⏳ Waiting for MySQL service... Attempt $i"
+            echo "⏳ Waiting for MySQL... Attempt $i"
             sleep 10
           done
-          echo "❌ MySQL did not become healthy in time."
+          echo "❌ MySQL not healthy"
           exit 1
 
-      # 4.5️⃣ Initialize MySQL with init.sql
-      - name: Initialize MySQL (tables & procedures)
+      # Initialize MySQL
+      - name: Initialize MySQL
         run: |
-          echo "Running init.sql to create tables and procedures..."
           mysql -h 127.0.0.1 -P 3306 -u root -proot_password testdb < back-end/server/init.sql
 
-      # 5️⃣ Cache & install backend dependencies
-      - name: Cache backend dependencies
-        uses: actions/cache@v4
-        with:
-          path: back-end/server/node_modules
-          key: ${{ runner.os }}-backend-${{ hashFiles('back-end/server/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-backend-
-
-      - name: Install backend dependencies
+      # Install backend dependencies
+      - name: Install backend deps
         run: npm ci --prefix ./back-end/server
 
-      # 6️⃣ Copy .env.ci to backend
-      - name: Use .env.ci for backend
+      # Copy .env.ci
+      - name: Copy backend env
         run: cp back-end/server/.env.ci back-end/server/.env
 
-      # 7️⃣ Start backend server
-      - name: Start Backend Server
+      # Start backend server
+      - name: Start backend
         run: |
           cd back-end/server
           node server &
-          echo "✅ Backend started in background"
-        shell: bash
+          echo "✅ Backend started"
 
-      # 8️⃣ Cache & install frontend dependencies
-      - name: Cache frontend dependencies
-        uses: actions/cache@v4
-        with:
-          path: front-end/node_modules
-          key: ${{ runner.os }}-frontend-${{ hashFiles('front-end/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-frontend-
-
-      - name: Install frontend dependencies
+      # Install frontend dependencies
+      - name: Install frontend deps
         run: npm ci --prefix ./front-end
 
-      # 9️⃣ Start frontend (Vite)
-      - name: Start Frontend
+      # Start frontend server
+      - name: Start frontend
         run: |
           cd front-end
           npm run dev &
-          echo "✅ Frontend started in background"
-        shell: bash
+          echo "✅ Frontend started"
 
-      # 🔟 Cache & install Playwright dependencies
-      - name: Cache Playwright dependencies
-        uses: actions/cache@v4
-        with:
-          path: e2e-tests/node_modules
-          key: ${{ runner.os }}-e2e-${{ hashFiles('e2e-tests/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-e2e-
-
-      - name: Install Playwright dependencies
+      # Install Playwright deps
+      - name: Install Playwright
         run: |
           cd e2e-tests
           npm ci
           npx playwright install --with-deps
 
-      # 1️⃣1️⃣ Wait for backend & frontend to be ready
+      # Wait for backend & frontend
       - name: Wait for backend & frontend
         run: npx wait-on --timeout 180000 http://127.0.0.1:5001/health http://127.0.0.1:5173
 
-      # 1️⃣2️⃣ Run Playwright E2E tests
-      - name: Run Playwright E2E Tests
+      # Run Playwright tests
+      - name: Run Playwright tests
         run: |
           cd e2e-tests
           npx playwright test --reporter=html
         env:
           CI: true
 
-      # 1️⃣3️⃣ Upload Playwright report
+      # Upload report
       - uses: actions/upload-artifact@v4
         if: always()
         with:
