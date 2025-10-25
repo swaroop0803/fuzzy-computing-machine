@@ -65,9 +65,7 @@ jobs:
       - name: Start Backend Server
         run: |
           cd back-end/server
-          # wait until MySQL is accepting connections
           npx wait-on tcp:mysql:3306
-          # start backend
           DB_HOST=mysql \
           DB_USER=root \
           DB_PASSWORD=root_password \
