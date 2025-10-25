@@ -11,12 +11,11 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     
-    # 💥 CRITICAL FIX: Define the MySQL service container 💥
+    # CRITICAL FIX: Define the MySQL service container
     services:
       mysql: # This service name becomes the HOSTNAME for the Node.js application
         image: mysql:8.0 # Use a standard MySQL Docker image
         # NOTE: You MUST pass your database configuration (User, Password, Name)
-        # using the appropriate environment variables for the MySQL Docker image.
         env:
           MYSQL_ROOT_PASSWORD: root_password # Replace with your actual DB_PASSWORD secret
           MYSQL_DATABASE: testdb # Replace with your actual DB_NAME secret
@@ -38,14 +37,11 @@ jobs:
         run: npm install --prefix ./back-end/server
 
       - name: Start Backend Server (on port 5001)
-        # 💥 FIX: Override DB_HOST to 'mysql' to connect to the service container.
-        # Run in background.
+        # FIX: Override DB_HOST to 'mysql' to connect to the service container.
+        # Run in background (&)
         run: DB_HOST=mysql npm start --prefix ./back-end/server & 
         
-      # 💥 REMOVED: Unreliable 'sleep 5' command removed. 💥
-        
       - name: Install Wait-On Utility
-        # This utility pauses the workflow until a URL is active
         run: npm install wait-on
 
       # --- 2. Setup Frontend and Playwright ---
@@ -60,8 +56,8 @@ jobs:
         run: npm run dev &
       
       - name: Wait for All Services to be Accessible
-        # 💥 CRITICAL FIX: Wait for both the backend TCP port AND the frontend HTTP URL 
-        # in one step with a generous timeout (120s). This is the most reliable CI synchronization method. 💥
+        # CRITICAL FIX: Wait for both the backend TCP port AND the frontend HTTP URL 
+        # with a generous timeout (120s).
         run: npx wait-on --timeout 120000 tcp:localhost:5001 http://localhost:5173
 
       # --- 3. Run Tests ---
