@@ -13,6 +13,7 @@ jobs:
 
     services:
       mysql:
+        # Uses the configuration matching DB_HOST=mysql and DB_PASSWORD=root_password
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root_password
@@ -34,7 +35,6 @@ jobs:
           node-version: 20
 
       # 2️⃣ Wait for MySQL service
-      # We rely on Docker's health check for robustness
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
@@ -48,34 +48,42 @@ jobs:
           echo "❌ MySQL did not become healthy in time."
           exit 1
 
-      # 3️⃣ Install dependencies
-      - name: Install Dependencies and Playwright Browsers
+      # 3️⃣ Install Dependencies (Backend, Frontend, E2E)
+      - name: Install Node Dependencies
         run: |
-          # Install dependencies for all parts of the app
           npm ci --prefix ./back-end/server
           npm ci --prefix ./front-end
           npm ci --prefix ./e2e-tests
-          
-          # Install Playwright browsers (Chromium and Firefox are default)
-          npx playwright install --with-deps
 
-      # 4️⃣ Start Backend
+      # 4️⃣ Install Playwright Browsers
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+        working-directory: e2e-tests
+          
+      # 5️⃣ Create .env.ci for Backend Configuration (Matches Canvas)
+      - name: Create .env.ci file
+        run: |
+          echo "PORT=5001" > .env.ci
+          echo "DB_HOST=mysql" >> .env.ci
+          echo "DB_USER=root" >> .env.ci
+          echo "DB_PASSWORD=root_password" >> .env.ci
+          echo "DB_NAME=testdb" >> .env.ci
+          echo "JWT_SECRET=a_very_strong_and_secret_key_that_no_one_can_guess" >> .env.ci
+        working-directory: back-end/server
+
+      # 6️⃣ Start Backend (Loads variables from .env.ci)
       - name: Start Backend Server
         run: |
           echo "🔹 Starting backend..."
-          # Run the server in the background and log output
+          # Load and export variables from .env.ci
+          set -a
+          source .env.ci
+          set +a
           node server.js > server.log 2>&1 &
           echo "🔹 Backend PID: $!"
         working-directory: back-end/server
-        env:
-          PORT: 5001
-          DB_HOST: mysql
-          DB_USER: root
-          DB_PASSWORD: root_password
-          DB_NAME: testdb
-          JWT_SECRET: a_very_strong_secret
 
-      # 5️⃣ Tail backend logs until ready
+      # 7️⃣ Tail backend logs until ready
       - name: Wait for Backend to be Ready (Port 5001)
         run: |
           timeout 180 bash -c 'until grep -q "🚀 Server is running" server.log; do
@@ -86,14 +94,14 @@ jobs:
           echo "✅ Backend is ready!"'
         working-directory: back-end/server
 
-      # 6️⃣ Start Frontend (Vite)
+      # 8️⃣ Start Frontend (Vite)
       - name: Start Frontend
         run: |
           npm run dev > vite.log 2>&1 &
           echo "🔹 Frontend started"
         working-directory: front-end
         
-      # 7️⃣ Wait for Frontend to be ready
+      # 9️⃣ Wait for Frontend to be ready
       - name: Wait for Frontend (Port 5173)
         run: |
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
@@ -104,14 +112,12 @@ jobs:
           echo "✅ Frontend is ready!"'
         working-directory: front-end
 
-      # 8️⃣ Run Playwright E2E Tests
-      # ⚠️ This step automatically runs register.spec.tsx, login.spec.tsx, and home.spec.tsx 
-      # across Chromium and Firefox, making it much more stable!
+      # 🔟 Run Playwright E2E Tests (Runs all isolated tests in Chromium/Firefox)
       - name: Run Playwright E2E Tests
         run: npx playwright test --reporter=html
         working-directory: e2e-tests
 
-      # 9️⃣ Upload Playwright report as artifact
+      # 1️⃣1️⃣ Upload Playwright report as artifact
       - uses: actions/upload-artifact@v4
         if: always()
         with:
