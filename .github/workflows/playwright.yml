@@ -33,14 +33,13 @@ jobs:
         with:
           node-version: 20
 
-      # 2️⃣ Wait for MySQL service
-      - name: Wait for MySQL
+      # 2️⃣ Wait for MySQL service to become healthy
+      - name: Wait for MySQL Service
         run: |
           for i in {1..10}; do
             if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
-              echo "✅ MySQL service is healthy."
-              # Added 5-second pause for network DNS stabilization
-              sleep 5 
+              echo "✅ MySQL service is healthy. Waiting 5s for network stability..."
+              sleep 5 # Critical: Wait an extra 5s for EAI_AGAIN fix
               exit 0
             fi
             echo "⏳ Waiting for MySQL service... Attempt $i"
@@ -48,81 +47,80 @@ jobs:
           done
           echo "❌ MySQL did not become healthy in time."
           exit 1
+      
+      # 3️⃣ Database Cleanup (Crucial fix for ER_DUP_ENTRY)
+      - name: Clean Database Before Backend Start
+        run: |
+          echo "🧹 Dropping and recreating testdb..."
+          mysql -h 127.0.0.1 -P 3306 -u root -proot_password -e "DROP DATABASE IF EXISTS testdb; CREATE DATABASE testdb;"
 
-      # 3️⃣ Install Dependencies (Backend, Frontend, E2E)
-      - name: Install Node Dependencies
+      # 4️⃣ Install dependencies
+      - name: Install Dependencies
         run: |
           npm ci --prefix ./back-end/server
           npm ci --prefix ./front-end
           npm ci --prefix ./e2e-tests
 
-      # 4️⃣ Install Playwright Browsers
+      # 5️⃣ Install Playwright browsers (after npm ci)
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
-        working-directory: e2e-tests
-          
-      # 5️⃣ Create .env.ci for Backend Configuration (Matches Canvas)
+        working-directory: ./e2e-tests
+
+      # 6️⃣ Create .env.ci for Backend Configuration
       - name: Create .env.ci file
         run: |
-          echo "PORT=5001" > .env.ci
-          echo "DB_HOST=mysql" >> .env.ci
-          echo "DB_USER=root" >> .env.ci
-          echo "DB_PASSWORD=root_password" >> .env.ci
-          echo "DB_NAME=testdb" >> .env.ci
-          echo "JWT_SECRET=a_very_strong_and_secret_key_that_no_one_can_guess" >> .env.ci
-        working-directory: back-end/server
+          echo "PORT=5001" > back-end/server/.env.ci
+          echo "DB_HOST=mysql" >> back-end/server/.env.ci
+          echo "DB_USER=root" >> back-end/server/.env.ci
+          echo "DB_PASSWORD=root_password" >> back-end/server/.env.ci
+          echo "DB_NAME=testdb" >> back-end/server/.env.ci
+          echo "JWT_SECRET=a_very_strong_and_secret_key_that_no_one_can_guess" >> back-end/server/.env.ci
+        working-directory: ./
 
-      # 6️⃣ Start Backend (Loads variables from .env.ci)
+      # 7️⃣ Start Backend with logs
       - name: Start Backend Server
-        # We source the variables in the main shell before running the server in the background
         run: |
           echo "🔹 Starting backend..."
-          set -a # Start exporting variables
-          source .env.ci
-          set +a # Stop exporting variables
-
-          # Run server in the background using the exported environment variables
-          node server.js > server.log 2>&1 &
+          # Source the .env.ci file to set environment variables
+          source back-end/server/.env.ci
+          # Start the server and pipe output to a log file
+          node back-end/server/server.js > back-end/server/server.log 2>&1 &
           echo "🔹 Backend PID: $!"
-        working-directory: back-end/server
+        working-directory: ./
 
-      # 7️⃣ Wait for Backend to be Ready (Port 5001)
-      - name: Wait for Backend to be Ready (Port 5001)
+      # 8️⃣ Wait for Backend HTTP Health Check (Robust)
+      - name: Wait for Backend to be Ready (Health Check)
         run: |
-          # Use curl against the new /health endpoint for a robust check.
-          # If curl fails, we dump the last 10 lines of the server log for debugging.
-          timeout 240 bash -c 'until curl --fail -s http://127.0.0.1:5001/health; do
-            echo "⏳ Waiting for backend (5001/health)... Checking logs..."
-            tail -n 10 server.log
+          BACKEND_LOG=./back-end/server/server.log
+          
+          # Use curl against the new /health endpoint for a robust check
+          timeout 180 bash -c 'until curl -s http://127.0.0.1:5001/health > /dev/null; do
+            echo "⏳ Waiting for backend (5001/health)..."
+            # Tail the log file to see connection errors/crashes
+            tail -n 15 "$BACKEND_LOG"
             sleep 5
           done
-          echo "✅ Backend is ready and healthy!"'
-        working-directory: back-end/server
+          echo "✅ Backend is ready and responding!"'
 
-      # 8️⃣ Start Frontend (Vite)
+      # 9️⃣ Start Frontend (Vite)
       - name: Start Frontend
-        run: |
-          npm run dev > vite.log 2>&1 &
-          echo "🔹 Frontend started"
-        working-directory: front-end
-        
-      # 9️⃣ Wait for Frontend to be ready
-      - name: Wait for Frontend (Port 5173)
+        run: npm run dev --prefix front-end > front-end/vite.log 2>&1 &
+      
+      # 🔟 Wait for Frontend to be ready (HTTP Check)
+      - name: Wait for Frontend
         run: |
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
-            echo "⏳ Waiting for frontend (5173)..."
-            tail -n 10 vite.log
+            echo "⏳ Waiting for frontend..."
             sleep 5
           done
           echo "✅ Frontend is ready!"'
-        working-directory: front-end
 
-      # 🔟 Run Playwright E2E Tests (Runs all isolated tests in Chromium/Firefox)
+      # 11 Run Playwright E2E Tests
       - name: Run Playwright E2E Tests
         run: npx playwright test --reporter=html
-        working-directory: e2e-tests
+        working-directory: ./e2e-tests
 
-      # 1️⃣1️⃣ Upload Playwright report as artifact
+      # 12 Upload Playwright report as artifact
       - uses: actions/upload-artifact@v4
         if: always()
         with:
