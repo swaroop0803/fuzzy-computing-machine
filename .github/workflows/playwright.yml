@@ -33,7 +33,8 @@ jobs:
         with:
           node-version: 20
 
-      # 2️⃣ Wait for MySQL
+      # 2️⃣ Wait for MySQL service
+      # We rely on Docker's health check for robustness
       - name: Wait for MySQL
         run: |
           for i in {1..10}; do
@@ -48,23 +49,24 @@ jobs:
           exit 1
 
       # 3️⃣ Install dependencies
-      - name: Install Backend Dependencies
-        run: npm ci --prefix ./back-end/server
-
-      - name: Install Frontend Dependencies
-        run: npm ci --prefix ./front-end
-
-      - name: Install Playwright Dependencies
+      - name: Install Dependencies and Playwright Browsers
         run: |
+          # Install dependencies for all parts of the app
+          npm ci --prefix ./back-end/server
+          npm ci --prefix ./front-end
           npm ci --prefix ./e2e-tests
+          
+          # Install Playwright browsers (Chromium and Firefox are default)
           npx playwright install --with-deps
 
-      # 4️⃣ Start Backend with logs
-      - name: Start Backend Server with logs
+      # 4️⃣ Start Backend
+      - name: Start Backend Server
         run: |
           echo "🔹 Starting backend..."
-          node back-end/server/server.js > back-end/server/server.log 2>&1 &
+          # Run the server in the background and log output
+          node server.js > server.log 2>&1 &
           echo "🔹 Backend PID: $!"
+        working-directory: back-end/server
         env:
           PORT: 5001
           DB_HOST: mysql
@@ -74,36 +76,40 @@ jobs:
           JWT_SECRET: a_very_strong_secret
 
       # 5️⃣ Tail backend logs until ready
-      - name: Wait for Backend to be Ready
+      - name: Wait for Backend to be Ready (Port 5001)
         run: |
-          timeout 180 bash -c 'until grep -q "🚀 Server is running" back-end/server/server.log; do
-            echo "⏳ Waiting for backend..."
-            tail -n 10 back-end/server/server.log
+          timeout 180 bash -c 'until grep -q "🚀 Server is running" server.log; do
+            echo "⏳ Waiting for backend (5001)..."
+            tail -n 10 server.log
             sleep 5
           done
           echo "✅ Backend is ready!"'
+        working-directory: back-end/server
 
       # 6️⃣ Start Frontend (Vite)
-      - name: Start Frontend with logs
+      - name: Start Frontend
         run: |
-          npm run dev --prefix front-end > front-end/vite.log 2>&1 &
+          npm run dev > vite.log 2>&1 &
           echo "🔹 Frontend started"
-
+        working-directory: front-end
+        
       # 7️⃣ Wait for Frontend to be ready
-      - name: Wait for Frontend
+      - name: Wait for Frontend (Port 5173)
         run: |
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
-            echo "⏳ Waiting for frontend..."
-            tail -n 10 front-end/vite.log
+            echo "⏳ Waiting for frontend (5173)..."
+            tail -n 10 vite.log
             sleep 5
           done
           echo "✅ Frontend is ready!"'
+        working-directory: front-end
 
       # 8️⃣ Run Playwright E2E Tests
+      # ⚠️ This step automatically runs register.spec.tsx, login.spec.tsx, and home.spec.tsx 
+      # across Chromium and Firefox, making it much more stable!
       - name: Run Playwright E2E Tests
-        run: |
-          cd e2e-tests
-          npx playwright test --reporter=html
+        run: npx playwright test --reporter=html
+        working-directory: e2e-tests
 
       # 9️⃣ Upload Playwright report as artifact
       - uses: actions/upload-artifact@v4
