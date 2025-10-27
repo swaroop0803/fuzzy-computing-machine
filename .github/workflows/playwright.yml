@@ -88,19 +88,18 @@ jobs:
           echo "🔹 Backend PID: $!"
         working-directory: ./
 
-      # 8️⃣ Wait for Backend HTTP Health Check (Robust)
+      # 8️⃣ Wait for Backend HTTP Health Check (FIXED: Direct log path usage)
       - name: Wait for Backend to be Ready (Health Check)
         run: |
-          BACKEND_LOG=./back-end/server/server.log
-          
           # Use curl against the new /health endpoint for a robust check
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5001/health > /dev/null; do
-            echo "⏳ Waiting for backend (5001/health)..."
-            # Tail the log file to see connection errors/crashes
-            tail -n 15 "$BACKEND_LOG"
+            echo "⏳ Waiting for backend (5001/health)... Checking logs..."
+            # Using the literal path resolves the variable scoping issue (tail: cannot open '')
+            tail -n 15 "./back-end/server/server.log"
             sleep 5
           done
           echo "✅ Backend is ready and responding!"'
+        working-directory: ./
 
       # 9️⃣ Start Frontend (Vite)
       - name: Start Frontend
