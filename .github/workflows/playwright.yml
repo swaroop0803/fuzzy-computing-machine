@@ -66,46 +66,35 @@ jobs:
         run: npx playwright install --with-deps
         working-directory: ./e2e-tests
 
-      # 6️⃣ Create .env.ci for Backend Configuration
-      - name: Create .env.ci file
-        run: |
-          echo "PORT=5001" > back-end/server/.env.ci
-          echo "DB_HOST=mysql" >> back-end/server/.env.ci
-          echo "DB_USER=root" >> back-end/server/.env.ci
-          echo "DB_PASSWORD=root_password" >> back-end/server/.env.ci
-          echo "DB_NAME=testdb" >> back-end/server/.env.ci
-          echo "JWT_SECRET=a_very_strong_and_secret_key_that_no_one_can_guess" >> back-end/server/.env.ci
-        working-directory: ./
-
-      # 7️⃣ Start Backend with logs
+      # 6️⃣ Start Backend with logs (RELIANCE ON COMMITTED .env.ci)
       - name: Start Backend Server
         run: |
           echo "🔹 Starting backend..."
-          # Source the .env.ci file to set environment variables
+          # Source the committed .env.ci file to set environment variables
           source back-end/server/.env.ci
           # Start the server and pipe output to a log file
           node back-end/server/server.js > back-end/server/server.log 2>&1 &
           echo "🔹 Backend PID: $!"
         working-directory: ./
 
-      # 8️⃣ Wait for Backend HTTP Health Check (FIXED: Direct log path usage)
+      # 7️⃣ Wait for Backend HTTP Health Check (FIXED: Correct log path usage)
       - name: Wait for Backend to be Ready (Health Check)
         run: |
           # Use curl against the new /health endpoint for a robust check
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5001/health > /dev/null; do
             echo "⏳ Waiting for backend (5001/health)... Checking logs..."
-            # Using the literal path resolves the variable scoping issue (tail: cannot open '')
+            # Using the literal path resolves the tail: cannot open '' error
             tail -n 15 "./back-end/server/server.log"
             sleep 5
           done
           echo "✅ Backend is ready and responding!"'
         working-directory: ./
 
-      # 9️⃣ Start Frontend (Vite)
+      # 8️⃣ Start Frontend (Vite)
       - name: Start Frontend
         run: npm run dev --prefix front-end > front-end/vite.log 2>&1 &
       
-      # 🔟 Wait for Frontend to be ready (HTTP Check)
+      # 9️⃣ Wait for Frontend to be ready (HTTP Check)
       - name: Wait for Frontend
         run: |
           timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
@@ -114,12 +103,12 @@ jobs:
           done
           echo "✅ Frontend is ready!"'
 
-      # 11 Run Playwright E2E Tests
+      # 🔟 Run Playwright E2E Tests
       - name: Run Playwright E2E Tests
         run: npx playwright test --reporter=html
         working-directory: ./e2e-tests
 
-      # 12 Upload Playwright report as artifact
+      # 11 Upload Playwright report as artifact
       - uses: actions/upload-artifact@v4
         if: always()
         with:
