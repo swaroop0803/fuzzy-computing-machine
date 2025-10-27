@@ -13,7 +13,6 @@ jobs:
 
     services:
       mysql:
-        # Uses the configuration matching DB_HOST=mysql and DB_PASSWORD=root_password
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root_password
@@ -40,6 +39,8 @@ jobs:
           for i in {1..10}; do
             if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
               echo "✅ MySQL service is healthy."
+              # Added 5-second pause for network DNS stabilization
+              sleep 5 
               exit 0
             fi
             echo "⏳ Waiting for MySQL service... Attempt $i"
@@ -73,25 +74,27 @@ jobs:
 
       # 6️⃣ Start Backend (Loads variables from .env.ci)
       - name: Start Backend Server
+        # We source the variables in the main shell before running the server in the background
         run: |
           echo "🔹 Starting backend..."
-          # Load and export variables from .env.ci
-          set -a
+          set -a # Start exporting variables
           source .env.ci
-          set +a
+          set +a # Stop exporting variables
+
+          # Run server in the background using the exported environment variables
           node server.js > server.log 2>&1 &
           echo "🔹 Backend PID: $!"
         working-directory: back-end/server
 
-      # 7️⃣ Tail backend logs until ready
+      # 7️⃣ Wait for Backend to be Ready (Port 5001)
       - name: Wait for Backend to be Ready (Port 5001)
         run: |
-          timeout 180 bash -c 'until grep -q "🚀 Server is running" server.log; do
-            echo "⏳ Waiting for backend (5001)..."
-            tail -n 10 server.log
+          # Use curl against the new /health endpoint for a robust check
+          timeout 240 bash -c 'until curl --fail -s http://127.0.0.1:5001/health; do
+            echo "⏳ Waiting for backend (5001/health)..."
             sleep 5
           done
-          echo "✅ Backend is ready!"'
+          echo "✅ Backend is ready and healthy!"'
         working-directory: back-end/server
 
       # 8️⃣ Start Frontend (Vite)
