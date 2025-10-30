@@ -17,16 +17,19 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: testdb
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
         ports:
           - 3306:3306
         options: >-
+          --default-authentication-plugin=mysql_native_password
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout repo
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -53,7 +56,7 @@ jobs:
           npm install
           npx playwright install --with-deps
 
-      # 6️⃣ Initialize database (optional — only if you have init.sql)
+      # 6️⃣ Initialize MySQL Database
       - name: Initialize MySQL Database
         run: |
           sudo apt-get install -y mysql-client
@@ -64,10 +67,12 @@ jobs:
             mysql -h 127.0.0.1 -P 3306 -u root -proot testdb < back-end/server/init.sql
           fi
 
-      # 7️⃣ Start backend server
+      # 7️⃣ Start backend server (use .env.ci)
       - name: Start backend server
         working-directory: ./back-end/server
         run: |
+          echo "⚙️ Using .env.ci for environment variables..."
+          cp .env.ci .env
           nohup node server.js > backend.log 2>&1 &
           echo "⏳ Waiting for backend to start..."
           for i in {1..20}; do
@@ -104,5 +109,5 @@ jobs:
         env:
           API_BASE_URL: http://127.0.0.1:5001
         run: |
-          echo "Running Playwright tests..."
+          echo "🎭 Running Playwright tests..."
           npx playwright test --reporter=line
