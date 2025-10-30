@@ -1,117 +1,89 @@
-name: E2E Tests (Playwright)
+name: Playwright E2E Tests with Frontend + Backend + MySQL + Allure Report
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  playwright:
+  e2e-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: testdb
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -u root -p$$MYSQL_ROOT_PASSWORD"
+          --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # 1️⃣ Setup Node.js
-      - uses: actions/setup-node@v4
+      # 2️⃣ Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 2️⃣ Wait for MySQL service to become healthy
-      - name: Wait for MySQL Service
-        run: |
-          for i in {1..10}; do
-            if [[ "$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.mysql.id }})" == "healthy" ]]; then
-              echo "✅ MySQL service is healthy. Waiting 5s for network stability..."
-              sleep 5 # Critical: Wait an extra 5s for EAI_AGAIN fix
-              exit 0
-            fi
-            echo "⏳ Waiting for MySQL service... Attempt $i"
-            sleep 10
-          done
-          echo "❌ MySQL did not become healthy in time."
-          exit 1
-      
-      # 3️⃣ Database Cleanup (Crucial fix for ER_DUP_ENTRY)
-      - name: Clean Database Before Backend Start
-        run: |
-          echo "🧹 Dropping and recreating testdb..."
-          mysql -h 127.0.0.1 -P 3306 -u root -proot_password -e "DROP DATABASE IF EXISTS testdb; CREATE DATABASE testdb;"
+      # 3️⃣ Install backend dependencies
+      - name: Install backend dependencies
+        working-directory: ./back-end/server
+        run: npm install
 
-      # 4️⃣ Install dependencies
-      - name: Install Dependencies
-        run: |
-          npm ci --prefix ./back-end/server
-          npm ci --prefix ./front-end
-          npm ci --prefix ./e2e-tests
+      # 4️⃣ Install frontend dependencies
+      - name: Install frontend dependencies
+        working-directory: ./front-end
+        run: npm install
 
-      # 5️⃣ Install Playwright browsers (after npm ci)
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
+      # 5️⃣ Install e2e test dependencies
+      - name: Install e2e test dependencies
         working-directory: ./e2e-tests
+        run: npm install
 
-      # 6️⃣ Start Backend with logs (RELIANCE ON COMMITTED .env.ci)
-      - name: Start Backend Server
+      # 6️⃣ Initialize MySQL database (optional if you use init.sql)
+      - name: Initialize MySQL Database
         run: |
-          echo "🔹 Starting backend..."
-          # Source the committed .env.ci file to set environment variables
-          source back-end/server/.env.ci
-          # Start the server and pipe output to a log file
-          node back-end/server/server.js > back-end/server/server.log 2>&1 &
-          echo "🔹 Backend PID: $!"
-        working-directory: ./
+          sudo apt-get install -y mysql-client
+          sleep 15
+          mysql -h 127.0.0.1 -P 3306 -u root -proot -e "CREATE DATABASE IF NOT EXISTS testdb;"
+          mysql -h 127.0.0.1 -P 3306 -u root -proot testdb < back-end/server/init.sql || true
 
-      # 7️⃣ Wait for Backend HTTP Health Check (FIXED: Correct log path usage)
-      - name: Wait for Backend to be Ready (Health Check)
+      # 7️⃣ Start backend (Express)
+      - name: Start backend
+        working-directory: ./back-end/server
         run: |
-          # Use curl against the new /health endpoint for a robust check
-          timeout 180 bash -c 'until curl -s http://127.0.0.1:5001/health > /dev/null; do
-            echo "⏳ Waiting for backend (5001/health)... Checking logs..."
-            # Using the literal path resolves the tail: cannot open '' error
-            tail -n 15 "./back-end/server/server.log"
-            sleep 5
-          done
-          echo "✅ Backend is ready and responding!"'
-        working-directory: ./
+          nohup node server.js > backend.log 2>&1 &
+          sleep 8
 
-      # 8️⃣ Start Frontend (Vite)
-      - name: Start Frontend
-        run: npm run dev --prefix front-end > front-end/vite.log 2>&1 &
-      
-      # 9️⃣ Wait for Frontend to be ready (HTTP Check)
-      - name: Wait for Frontend
+      # 8️⃣ Start frontend (Vite)
+      - name: Start frontend
+        working-directory: ./front-end
         run: |
-          timeout 180 bash -c 'until curl -s http://127.0.0.1:5173 > /dev/null; do
-            echo "⏳ Waiting for frontend..."
-            sleep 5
-          done
-          echo "✅ Frontend is ready!"'
+          nohup npm run dev -- --host > frontend.log 2>&1 &
+          sleep 8
 
-      # 🔟 Run Playwright E2E Tests
-      - name: Run Playwright E2E Tests
-        run: npx playwright test --reporter=html
+      # 9️⃣ Run Playwright tests (frontend + backend must be up)
+      - name: Run Playwright tests
         working-directory: ./e2e-tests
+        run: npx playwright test --reporter=line,allure-playwright
 
-      # 11 Upload Playwright report as artifact
-      - uses: actions/upload-artifact@v4
-        if: always()
+      # 🔟 Generate Allure Report
+      - name: Generate Allure report
+        working-directory: ./e2e-tests
+        run: npx allure generate allure-results --clean -o allure-report
+
+      # 11️⃣ Deploy Allure report to GitHub Pages
+      - name: Deploy Allure Report
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          name: playwright-report
-          path: e2e-tests/playwright-report/
-          retention-days: 30
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./e2e-tests/allure-report
