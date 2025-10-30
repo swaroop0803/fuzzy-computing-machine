@@ -11,6 +11,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      # 🗄️ Start a MySQL service in GitHub Actions
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: myapp
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       # 1️⃣ Checkout repository
       - name: Checkout code
@@ -22,19 +39,21 @@ jobs:
         with:
           node-version: 18
 
-      # 3️⃣ Install and start backend
+      # 3️⃣ Install backend dependencies
       - name: Install backend dependencies
         run: |
           cd back-end
           npm install
+
+      # 4️⃣ Start backend
       - name: Start backend server
         run: |
           cd back-end/server
           nohup node server.js > backend.log 2>&1 &
           sleep 5
 
-      # 4️⃣ Wait for backend to be ready
-      - name: Wait for backend
+      # 5️⃣ Wait for backend to be ready
+      - name: Wait for backend health check
         run: |
           for i in {1..20}; do
             if curl -s http://127.0.0.1:5001/health > /dev/null; then
@@ -42,25 +61,27 @@ jobs:
               exit 0
             fi
             echo "⏳ Waiting for backend..."
-            sleep 4
+            sleep 5
           done
           echo "❌ Backend did not start in time"
           cat back-end/server/backend.log
           exit 1
 
-      # 5️⃣ Install and start frontend
+      # 6️⃣ Install frontend dependencies
       - name: Install frontend dependencies
         run: |
           cd front-end
           npm install
+
+      # 7️⃣ Start frontend
       - name: Start frontend
         run: |
           cd front-end
           nohup npm run dev -- --host > frontend.log 2>&1 &
           sleep 8
 
-      # 6️⃣ Wait for frontend
-      - name: Wait for frontend
+      # 8️⃣ Wait for frontend
+      - name: Wait for frontend to be ready
         run: |
           for i in {1..20}; do
             if curl -s http://127.0.0.1:5173 > /dev/null; then
@@ -68,23 +89,28 @@ jobs:
               exit 0
             fi
             echo "⏳ Waiting for frontend..."
-            sleep 4
+            sleep 5
           done
           echo "❌ Frontend did not start in time"
           cat front-end/frontend.log
           exit 1
 
-      # 7️⃣ Install Playwright dependencies
+      # 9️⃣ Install Playwright & dependencies
       - name: Install Playwright
         run: |
           cd e2e-tests
           npm install
           npx playwright install --with-deps
 
-      # 8️⃣ Run Playwright tests
+      # 🔟 Run Playwright tests
       - name: Run Playwright tests
         run: |
           cd e2e-tests
           npx playwright test --reporter=line
         env:
           API_BASE_URL: http://127.0.0.1:5001
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: testuser
+          DB_PASSWORD: testpass
+          DB_NAME: myapp
