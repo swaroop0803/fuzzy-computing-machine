@@ -41,7 +41,7 @@ class User {
      * @returns {Promise<object | null>} The user object or null if not found.
      */
     static async findByEmail(email) {
-        // FIX: Select 'id' and alias it as 'user_id' for consistency with auth.js
+        // FIX: Select 'id' and alias it as 'user_id' for consistency with uth.js
         // Also select 'password' and alias it as 'hashed_password'
         const sql = "SELECT id AS user_id, username, email, password AS hashed_password FROM users WHERE email = ?";
         
