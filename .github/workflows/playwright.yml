@@ -18,6 +18,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
+          --default-authentication-plugin=mysql_native_password
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
@@ -68,9 +69,18 @@ jobs:
             mysql -h 127.0.0.1 -P 3306 -u root -proot testdb < back-end/server/init.sql
           fi
 
-      # 7️⃣ Start backend (and confirm it's healthy)
+      # 7️⃣ Start backend (with env vars + health check)
       - name: Start backend
         working-directory: ./back-end/server
+        env:
+          NODE_ENV: test
+          PORT: 5001
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: testdb
+          DB_PORT: 3306
+          JWT_SECRET: test_secret
         run: |
           nohup node server.js > backend.log 2>&1 &
           echo "⏳ Waiting for backend to start..."
@@ -85,7 +95,7 @@ jobs:
           cat backend.log
           exit 1
 
-      # 8️⃣ Start frontend (and confirm it’s up)
+      # 8️⃣ Start frontend (Vite) and check
       - name: Start frontend
         working-directory: ./front-end
         run: |
@@ -102,7 +112,7 @@ jobs:
           cat frontend.log
           exit 1
 
-      # 9️⃣ Run Playwright tests
+      # 9️⃣ Run Playwright Tests
       - name: Run Playwright Tests
         working-directory: ./e2e-tests
         env:
