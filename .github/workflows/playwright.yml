@@ -38,7 +38,7 @@ jobs:
           node-version: 20
       - name: Load environment variables
         run: |
-          cp .env.ci .env
+          cp back-end/server/.env.ci back-end/server/.env
 
       # 3️⃣ Install backend dependencies
       - name: Install backend dependencies
