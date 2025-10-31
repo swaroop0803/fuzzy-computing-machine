@@ -112,7 +112,6 @@ jobs:
           npx playwright test --reporter=line
 
 
-
 # name: Run Playwright E2E Tests (Frontend + Backend + MySQL)
 
 # on:
