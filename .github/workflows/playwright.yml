@@ -15,10 +15,12 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: testdb
+          MYSQL_USER: remoteuser
+          MYSQL_PASSWORD: mypassword
+          MYSQL_AUTHENTICATION_PLUGIN: mysql_native_password
         ports:
           - 3306:3306
         options: >-
-          --default-authentication-plugin=mysql_native_password
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
@@ -34,6 +36,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Load environment variables
+        run: |
+          cp .env.ci .env
 
       # 3️⃣ Install backend dependencies
       - name: Install backend dependencies
