@@ -1,0 +1,175 @@
+name: Run All Tests (Playwright + Allure Vitest)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # ========================
+  # 🧪 Job 1: Allure + Vitest
+  # ========================
+  allure-vitest:
+    name: Run Allure Vitest Tests
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        working-directory: ./front-end
+        run: npm install
+
+      - name: Run Vitest tests (with Allure)
+        working-directory: ./front-end
+        run: npm run test:report
+
+      - name: Generate Allure HTML report
+        working-directory: ./front-end
+        run: |
+          npx allure generate ./allure-results --clean -o ./allure-report-html
+
+      - name: Deploy Allure report to /allure-vitest
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: front-end/allure-report-html
+          publish_branch: gh-pages
+          destination_dir: allure-vitest
+          force_orphan: true
+
+  # ===========================
+  # 🎭 Job 2: Playwright Tests
+  # ===========================
+  playwright-tests:
+    name: Run Playwright E2E Tests (Frontend + Backend + MySQL)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: remoteuser
+          MYSQL_PASSWORD: mypassword
+          MYSQL_AUTHENTICATION_PLUGIN: mysql_native_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Load environment variables
+        run: |
+          cp back-end/server/.env.ci back-end/server/.env || echo "No .env.ci found"
+
+      - name: Install backend dependencies
+        working-directory: ./back-end/server
+        run: npm install
+
+      - name: Install frontend dependencies
+        working-directory: ./front-end
+        run: npm install
+
+      - name: Install Playwright dependencies
+        working-directory: ./e2e-tests
+        run: |
+          npm install
+          npx playwright install --with-deps
+
+      - name: Initialize MySQL Database
+        run: |
+          sudo apt-get install -y mysql-client
+          echo "⏳ Waiting for MySQL..."
+          for i in {1..10}; do
+            if mysqladmin ping -h127.0.0.1 -uroot -proot --silent; then
+              echo "✅ MySQL Ready!"
+              break
+            fi
+            sleep 5
+          done
+          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS testdb;"
+          if [ -f back-end/server/init.sql ]; then
+            mysql -h127.0.0.1 -uroot -proot testdb < back-end/server/init.sql
+          fi
+
+      - name: Start backend
+        working-directory: ./back-end/server
+        env:
+          NODE_ENV: test
+          PORT: 5001
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: testdb
+          DB_PORT: 3306
+          JWT_SECRET: test_secret
+        run: |
+          nohup node server.js > backend.log 2>&1 &
+          for i in {1..20}; do
+            if curl -s http://127.0.0.1:5001/health > /dev/null; then
+              echo "✅ Backend started!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "❌ Backend failed to start"
+          cat backend.log
+          exit 1
+
+      - name: Start frontend
+        working-directory: ./front-end
+        run: |
+          nohup npm run dev -- --host > frontend.log 2>&1 &
+          for i in {1..20}; do
+            if curl -s http://127.0.0.1:5173 > /dev/null; then
+              echo "✅ Frontend started!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "❌ Frontend failed to start"
+          cat frontend.log
+          exit 1
+
+      - name: Run Playwright Tests
+        working-directory: ./e2e-tests
+        env:
+          API_BASE_URL: http://127.0.0.1:5001
+        run: |
+          npx playwright test --reporter=html
+          mkdir -p playwright-report-html
+          cp -r playwright-report/* playwright-report-html/
+
+      - name: Deploy Playwright Report to /playwright
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: e2e-tests/playwright-report-html
+          publish_branch: gh-pages
+          destination_dir: playwright
+          force_orphan: true
