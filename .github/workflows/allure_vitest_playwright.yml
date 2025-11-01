@@ -32,15 +32,24 @@ jobs:
         working-directory: ./front-end
         run: npm ci
 
-      - name: Run Vitest tests (with Allure)
+      # 🧪 Run tests and generate allure-results
+      - name: Run Vitest tests with Allure
         working-directory: ./front-end
-        run: npm run test:report
+        run: npm run allure:run
 
+      # 🧱 Generate the Allure HTML report
       - name: Generate Allure HTML report
         working-directory: ./front-end
-        run: |
-          npx allure generate ./allure-results --clean -o ./allure-report-html
+        run: npm run allure:generate
 
+      # 📂 Move the report for deployment
+      - name: Prepare Allure Report folder
+        working-directory: ./front-end
+        run: |
+          mkdir -p allure-report-html
+          cp -r allure-report/* allure-report-html/
+
+      # 🚀 Deploy to GitHub Pages under /allure-vitest
       - name: Deploy Allure report to /allure-vitest
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -50,6 +59,7 @@ jobs:
           destination_dir: allure-vitest
           force_orphan: true
 
+      # 🔗 Add link in workflow summary
       - name: Add summary link
         run: |
           echo "✅ [Allure Vitest Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/allure-vitest)" >> $GITHUB_STEP_SUMMARY
