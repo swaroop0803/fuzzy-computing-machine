@@ -41,6 +41,8 @@ jobs:
   # 🎭 Job 2 — Playwright Tests
   playwright-tests:
     runs-on: ubuntu-latest
+    env:
+      FRONTEND_URL: https://swaroop0803.github.io/fuzzy-computing-machine
     permissions:
       contents: write
       pages: write
