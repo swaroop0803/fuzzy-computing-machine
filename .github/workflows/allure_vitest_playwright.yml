@@ -1,4 +1,4 @@
-name: Run Allure (Vitest) + Playwright Tests and Deploy Reports
+name: Run Allure (Vitest) + Playwright Tests in Parallel and Deploy Reports
 
 on:
   push:
@@ -6,7 +6,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-tests:
+  # 🧪 Job 1 — Run Allure (Vitest) tests
+  allure-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ./front-end
+        run: npm install
+
+      - name: Run Vitest with Allure
+        working-directory: ./front-end
+        run: |
+          npm run test:report
+          npx allure generate ./allure-results --clean -o ../allure-report-vite
+
+      - name: Upload Allure report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report-vite
+
+  # 🎭 Job 2 — Run Playwright E2E tests
+  playwright-tests:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,22 +63,18 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3️⃣ Load environment variables
       - name: Load environment variables
         run: |
           cp back-end/server/.env.ci back-end/server/.env
 
-      # 4️⃣ Install dependencies
       - name: Install backend dependencies
         working-directory: ./back-end/server
         run: npm install
@@ -54,20 +83,19 @@ jobs:
         working-directory: ./front-end
         run: npm install
 
-      - name: Install e2e test dependencies
+      - name: Install Playwright dependencies
         working-directory: ./e2e-tests
         run: |
           npm install
           npx playwright install --with-deps
 
-      # 5️⃣ Initialize MySQL database
       - name: Initialize MySQL Database
         run: |
           sudo apt-get install -y mysql-client
-          echo "⏳ Waiting for MySQL to be ready..."
+          echo "⏳ Waiting for MySQL..."
           for i in {1..10}; do
             if mysqladmin ping -h127.0.0.1 -uroot -proot --silent; then
-              echo "✅ MySQL is ready!"
+              echo "✅ MySQL ready!"
               break
             fi
             sleep 5
@@ -77,7 +105,6 @@ jobs:
             mysql -h127.0.0.1 -uroot -proot testdb < back-end/server/init.sql
           fi
 
-      # 6️⃣ Start backend
       - name: Start backend
         working-directory: ./back-end/server
         env:
@@ -94,13 +121,12 @@ jobs:
           echo "⏳ Waiting for backend..."
           for i in {1..20}; do
             if curl -s http://127.0.0.1:5001/health > /dev/null; then
-              echo "✅ Backend is ready!"
+              echo "✅ Backend is up!"
               break
             fi
             sleep 3
           done
 
-      # 7️⃣ Start frontend
       - name: Start frontend
         working-directory: ./front-end
         run: |
@@ -108,52 +134,73 @@ jobs:
           echo "⏳ Waiting for frontend..."
           for i in {1..20}; do
             if curl -s http://127.0.0.1:5173 > /dev/null; then
-              echo "✅ Frontend is up!"
+              echo "✅ Frontend is running!"
               break
             fi
             sleep 3
           done
 
-      # 8️⃣ Run Vitest (Allure)
-      - name: Run Vitest with Allure
-        working-directory: ./front-end
-        run: |
-          npm run test:report
-          npx allure generate ./allure-results --clean -o ../allure-report-vite
-
-      # 9️⃣ Run Playwright Tests
-      - name: Run Playwright Tests
+      - name: Run Playwright tests
         working-directory: ./e2e-tests
         env:
           API_BASE_URL: http://127.0.0.1:5001
         run: |
-          echo "🎭 Running Playwright tests..."
           npx playwright test --reporter=html
           mkdir -p ../playwright-report
           cp -r playwright-report ../playwright-report
 
-      # 🔟 Combine reports into single deployable folder
-      - name: Combine reports into one folder
-        run: |
-          mkdir -p combined-report
-          cp -r allure-report-vite combined-report/allure-report
-          cp -r playwright-report combined-report/playwright-report
+      - name: Upload Playwright report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
 
+  # 🚀 Job 3 — Combine reports & deploy (runs after both finish)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [allure-tests, playwright-tests]
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Allure report
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-report
+          path: combined-report/allure-report
+
+      - name: Download Playwright report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-report
+          path: combined-report/playwright-report
+
+      - name: Create index page
+        run: |
           cat <<EOF > combined-report/index.html
           <html>
             <head>
-              <title>Test Reports</title>
+              <title>Test Reports Dashboard</title>
+              <style>
+                body { font-family: Arial, sans-serif; background: #fafafa; text-align: center; padding: 60px; }
+                h1 { color: #222; }
+                .link { display: block; margin: 20px auto; width: 250px; padding: 15px; background: #0078d4; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; }
+                .link:hover { background: #005fa3; }
+              </style>
             </head>
-            <body style="font-family:sans-serif;text-align:center;padding:40px;">
+            <body>
               <h1>✅ Test Reports Dashboard</h1>
-              <p><a href="./allure-report/index.html">📊 View Allure (Vitest) Report</a></p>
-              <p><a href="./playwright-report/index.html">🎭 View Playwright Report</a></p>
+              <a class="link" href="./allure-report/index.html">📊 View Allure (Vitest) Report</a>
+              <a class="link" href="./playwright-report/index.html">🎭 View Playwright Report</a>
             </body>
           </html>
           EOF
 
-      # 1️⃣1️⃣ Deploy to GitHub Pages
-      - name: Deploy combined reports to GitHub Pages
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -161,8 +208,7 @@ jobs:
           publish_branch: gh-pages
           force_orphan: true
 
-      # 1️⃣2️⃣ Display report link
-      - name: Display Reports URL
+      - name: Show Report URL
         run: |
           echo "## ✅ Reports Published Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "- [Allure & Playwright Reports](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Open Reports](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
