@@ -1,4 +1,4 @@
-name: Run Allure (Vitest) + Playwright Tests in Parallel and Deploy Reports
+name: Run Allure (Vitest) + Playwright Tests in Parallel and Deploy Reports + Web App Link
 
 on:
   push:
@@ -155,7 +155,7 @@ jobs:
           name: playwright-report
           path: /home/runner/work/${{ github.event.repository.name }}/playwright-report
 
-  # 🚀 Job 3 — Deploy Both Reports
+  # 🚀 Job 3 — Deploy Both Reports + Website Link
   deploy:
     runs-on: ubuntu-latest
     needs: [allure-tests, playwright-tests]
@@ -188,7 +188,7 @@ jobs:
               <style>
                 body { font-family: Arial, sans-serif; background: #fafafa; text-align: center; padding: 60px; }
                 h1 { color: #222; }
-                .link { display: block; margin: 20px auto; width: 250px; padding: 15px; background: #0078d4; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; }
+                .link { display: block; margin: 20px auto; width: 280px; padding: 15px; background: #0078d4; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; }
                 .link:hover { background: #005fa3; }
               </style>
             </head>
@@ -196,6 +196,7 @@ jobs:
               <h1>✅ Test Reports Dashboard</h1>
               <a class="link" href="./allure-report/index.html">📊 View Allure (Vitest) Report</a>
               <a class="link" href="./playwright-report/index.html">🎭 View Playwright Report</a>
+              <a class="link" href="./app/">🌐 View Web App</a>
             </body>
           </html>
           EOF
@@ -211,4 +212,4 @@ jobs:
       - name: Show Report URL
         run: |
           echo "## ✅ Reports Published Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "- [Open Reports](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Open Dashboard](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
