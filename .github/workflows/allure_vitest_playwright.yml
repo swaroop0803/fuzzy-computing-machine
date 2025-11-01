@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 🧪 Job 1 — Run Allure (Vitest) tests
+  # 🧪 Job 1 — Allure (Vitest)
   allure-tests:
     runs-on: ubuntu-latest
     permissions:
@@ -30,15 +30,15 @@ jobs:
         working-directory: ./front-end
         run: |
           npm run test:report
-          npx allure generate ./allure-results --clean -o ../allure-report-vite
+          npx allure generate ./allure-results --clean -o ./allure-report-vite
 
       - name: Upload Allure report artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: allure-report-vite
+          path: front-end/allure-report-vite
 
-  # 🎭 Job 2 — Run Playwright E2E tests
+  # 🎭 Job 2 — Playwright Tests
   playwright-tests:
     runs-on: ubuntu-latest
     permissions:
@@ -72,8 +72,7 @@ jobs:
           node-version: 20
 
       - name: Load environment variables
-        run: |
-          cp back-end/server/.env.ci back-end/server/.env
+        run: cp back-end/server/.env.ci back-end/server/.env
 
       - name: Install backend dependencies
         working-directory: ./back-end/server
@@ -145,17 +144,18 @@ jobs:
         env:
           API_BASE_URL: http://127.0.0.1:5001
         run: |
+          echo "🎭 Running Playwright Tests..."
           npx playwright test --reporter=html
-          mkdir -p ../playwright-report
-          cp -r playwright-report ../playwright-report
+          mkdir -p /home/runner/work/${{ github.event.repository.name }}/playwright-report
+          cp -r playwright-report/* /home/runner/work/${{ github.event.repository.name }}/playwright-report/
 
       - name: Upload Playwright report artifact
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report
+          path: /home/runner/work/${{ github.event.repository.name }}/playwright-report
 
-  # 🚀 Job 3 — Combine reports & deploy (runs after both finish)
+  # 🚀 Job 3 — Deploy Both Reports
   deploy:
     runs-on: ubuntu-latest
     needs: [allure-tests, playwright-tests]
