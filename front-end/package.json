@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://swaroop0803.github.io/fuzzy-computing-machine/app/",
+  "homepage": "https://swaroop0803.github.io/fuzzy-computing-machine/",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
